@@ -1,23 +1,25 @@
 # context-handoff
 
+[中文](./README.zh-CN.md) | English
+
 `context-handoff` is a lightweight workflow for reducing context rebuild cost across multi-worktree, multi-thread feature development with stable repo docs, a local sidecar state layer, and intake/handoff skills.
 
 ## What It Solves
 
-- New threads repeatedly re-scan the same repository
-- Parallel worktrees and agent threads lose track of current task status
-- Feature or PR handoff is noisy, inconsistent, and expensive
+- New threads repeatedly re-scan the same repository.
+- Parallel worktrees and agent threads lose track of current task status.
+- Feature or PR handoff is noisy, inconsistent, and expensive.
 
 ## Core Idea
 
 Split project context into three layers:
 
 - `docs/agent/`
-  Stable repository facts that belong in version control
+  Stable repository facts that belong in version control.
 - local sidecar
-  Dynamic task state that should stay off feature PRs
+  Dynamic task state that should stay off feature PRs.
 - `worktree-intake` / `worktree-handoff`
-  Natural-language skill entry points for restoring and saving current task context
+  Natural-language skill entry points for restoring and saving current task context.
 
 ## Repository Layout
 
