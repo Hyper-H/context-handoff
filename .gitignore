@@ -1,0 +1,14 @@
+# Local sidecar state
+.codex-projects/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Temporary validation repos
+tmp/
