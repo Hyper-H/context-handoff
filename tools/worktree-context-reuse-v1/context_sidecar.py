@@ -556,7 +556,10 @@ def try_create_pr(
     args: argparse.Namespace,
 ) -> dict[str, Any]:
     title, body = build_pr_text(task, manager, args)
-    guidance = "Install and authenticate GitHub CLI, then rerun finish-feature --create-pr if you want Codex to create the PR."
+    guidance = (
+        "Install and authenticate GitHub CLI, then create the PR with the generated title/body "
+        "or the archived task JSON returned by finish-feature."
+    )
     result: dict[str, Any] = {
         "requested": bool(args.create_pr),
         "created": False,
@@ -574,7 +577,7 @@ def try_create_pr(
     }
 
     if not args.create_pr:
-        result["guidance"] = "PR creation was not requested; use the generated title/body manually or rerun with --create-pr."
+        result["guidance"] = "PR creation was not requested; use the generated title/body manually after finish archives the task."
         return result
     status = gh_status()
     result["gh"] = status
@@ -615,7 +618,7 @@ def try_create_pr(
     except subprocess.TimeoutExpired as exc:
         result["guidance"] = (
             "GitHub CLI timed out while creating the PR. The feature was still finished locally; "
-            "use the generated title/body or rerun after checking gh setup."
+            "use the generated title/body or archived task JSON after checking gh setup."
         )
         result["ghError"] = "\n".join(part for part in [exc.stdout or "", exc.stderr or ""] if part)
         return result
@@ -657,7 +660,14 @@ def archive_task(
     if handoff_path.exists():
         archive_md_path.write_text(handoff_path.read_text(encoding="utf-8"), encoding="utf-8")
 
-    payload["tasks"] = [item for item in payload.get("tasks", []) if item.get("taskId") != task.get("taskId")]
+    removed_selected = False
+    remaining_tasks = []
+    for item in payload.get("tasks", []):
+        if not removed_selected and item is task:
+            removed_selected = True
+            continue
+        remaining_tasks.append(item)
+    payload["tasks"] = remaining_tasks
     manager.save_active_tasks(payload)
     manager.log_event(
         event,
