@@ -17,3 +17,4 @@ tmp/
 
 # Humanize local session pointer
 .humanize/.pending-session-id
+.humanize/rlcr/

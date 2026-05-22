@@ -543,9 +543,9 @@ def try_create_pr(
         title,
         "--body",
         body,
-        "--base",
-        args.base or task.get("baseBranch") or manager.git.base_branch,
     ]
+    if args.base:
+        command.extend(["--base", args.base])
     if args.draft:
         command.append("--draft")
 
