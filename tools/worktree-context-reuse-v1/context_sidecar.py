@@ -219,8 +219,6 @@ class SidecarManager:
                 self.active_tasks_path,
                 {"version": SIDECAR_VERSION, "projectId": self.project_id, "tasks": []},
             )
-        if not self.project_state_path.exists():
-            self.write_project_state([])
 
     def load_active_tasks(self) -> dict[str, Any]:
         self.ensure_layout()
@@ -231,6 +229,8 @@ class SidecarManager:
         payload.setdefault("version", SIDECAR_VERSION)
         payload.setdefault("projectId", self.project_id)
         payload.setdefault("tasks", [])
+        if not self.project_state_path.exists():
+            self.write_project_state(payload.get("tasks", []))
         return payload
 
     def save_active_tasks(self, payload: dict[str, Any]) -> None:
@@ -484,10 +484,8 @@ def build_pr_text(task: dict[str, Any], manager: SidecarManager, args: argparse.
 
 
 def pr_base_for_create(task: dict[str, Any], manager: SidecarManager, explicit_base: str | None) -> str:
-    base = explicit_base or task.get("baseBranch") or manager.git.base_branch
-    base = (base or "").strip()
-    current_branch = (task.get("branch") or manager.git.branch or "").strip()
-    if not base or base == "unknown" or base == current_branch:
+    base = (explicit_base or "").strip()
+    if not base:
         return ""
     return base
 
