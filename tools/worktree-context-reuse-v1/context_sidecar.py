@@ -58,7 +58,34 @@ def default_weekly_period() -> str:
     return f"{iso_year}-W{iso_week:02d}"
 
 
+def is_pr_search_url(value: str) -> bool:
+    return bool(re.search(r"/pulls(?:[/?#]|$)", value.strip(), flags=re.IGNORECASE))
+
+
+def normalized_pr_fields(pr_url: Any, pr_search_url: Any = "", fallback_search_url: str = "") -> tuple[str, str]:
+    pr_url_text = str(pr_url or "").strip()
+    pr_search_url_text = str(pr_search_url or "").strip()
+    fallback_search_url = fallback_search_url.strip()
+    if is_pr_search_url(pr_url_text):
+        pr_search_url_text = pr_search_url_text or pr_url_text
+        pr_url_text = ""
+    if not pr_search_url_text and fallback_search_url:
+        pr_search_url_text = fallback_search_url
+    return pr_url_text, pr_search_url_text
+
+
+def normalize_task_pr_fields(task: dict[str, Any], fallback_search_url: str = "") -> None:
+    pr_url, pr_search_url = normalized_pr_fields(
+        task.get("prUrl", ""),
+        task.get("prSearchUrl", ""),
+        fallback_search_url,
+    )
+    task["prUrl"] = pr_url
+    task["prSearchUrl"] = pr_search_url
+
+
 def compact_task(task: dict[str, Any]) -> dict[str, Any]:
+    pr_url, pr_search_url = normalized_pr_fields(task.get("prUrl", ""), task.get("prSearchUrl", ""))
     return {
         "taskId": task.get("taskId", ""),
         "status": task.get("status", "active"),
@@ -66,8 +93,8 @@ def compact_task(task: dict[str, Any]) -> dict[str, Any]:
         "branch": task.get("branch", ""),
         "baseBranch": task.get("baseBranch", ""),
         "worktreePath": task.get("worktreePath", ""),
-        "prUrl": task.get("prUrl", ""),
-        "prSearchUrl": task.get("prSearchUrl", ""),
+        "prUrl": pr_url,
+        "prSearchUrl": pr_search_url,
         "touchedAreas": task.get("touchedAreas", []),
         "nextStep": task.get("nextStep", ""),
         "blocker": task.get("blocker", ""),
@@ -276,6 +303,8 @@ class SidecarManager:
         payload.setdefault("version", SIDECAR_VERSION)
         payload.setdefault("projectId", self.project_id)
         payload.setdefault("tasks", [])
+        for task in payload.get("tasks", []):
+            normalize_task_pr_fields(task)
         if not self.project_state_path.exists():
             self.write_project_state(payload.get("tasks", []))
         return payload
@@ -416,7 +445,7 @@ class SidecarManager:
             task["prUrl"] = args.pr_url
         elif not task.get("prUrl"):
             task["prUrl"] = self.git.pr_url
-        task["prSearchUrl"] = self.git.pr_search_url
+        normalize_task_pr_fields(task, self.git.pr_search_url)
 
         touched_areas = getattr(args, "touched_areas", None)
         if touched_areas:
@@ -471,8 +500,11 @@ def build_handoff_markdown(task: dict[str, Any], args: argparse.Namespace, manag
     risk_items = [item.strip() for item in (args.risks or []) if item.strip()]
     key_files = [item.strip() for item in (args.key_files or manager.git.touched_files[:8]) if item.strip()]
     touched_areas = task.get("touchedAreas") or manager.default_touched_areas()
-    pr_url = task.get("prUrl") or manager.git.pr_url or ""
-    pr_search_url = task.get("prSearchUrl") or manager.git.pr_search_url or ""
+    pr_url, pr_search_url = normalized_pr_fields(
+        task.get("prUrl") or manager.git.pr_url,
+        task.get("prSearchUrl"),
+        manager.git.pr_search_url,
+    )
     validation_tests = args.validation_tests or "not run"
     validation_manual = args.validation_manual or "not run"
     validation_notes = args.validation_notes or ""
@@ -595,6 +627,7 @@ def try_create_pr(
     manager: SidecarManager,
     args: argparse.Namespace,
 ) -> dict[str, Any]:
+    normalize_task_pr_fields(task, manager.git.pr_search_url)
     title, body = build_pr_text(task, manager, args)
     guidance = (
         "Install and authenticate GitHub CLI, then create the PR with the generated title/body "
@@ -604,6 +637,7 @@ def try_create_pr(
         "requested": bool(args.create_pr),
         "created": False,
         "prUrl": task.get("prUrl", ""),
+        "prSearchUrl": task.get("prSearchUrl", ""),
         "title": title,
         "body": body,
         "gh": {
@@ -691,6 +725,7 @@ def archive_task(
     archive_json_path = manager.archive_dir / f"{archive_base}.json"
     archive_md_path = manager.archive_dir / f"{archive_base}.md"
     handoff_path = manager.handoff_path_for(task)
+    normalize_task_pr_fields(task, manager.git.pr_search_url)
 
     archive_payload = dict(task)
     archive_payload["archivedAt"] = now_iso()
@@ -716,6 +751,7 @@ def archive_task(
         sidecar_hit=True,
         handoff_available=handoff_path.exists(),
         prUrl=(pr_result or {}).get("prUrl", task.get("prUrl", "")),
+        prSearchUrl=(pr_result or {}).get("prSearchUrl", task.get("prSearchUrl", "")),
         prCreated=(pr_result or {}).get("created", False),
     )
     return {
@@ -810,6 +846,8 @@ def cmd_intake(args: argparse.Namespace) -> int:
     if task is None:
         provisional = True
         task = manager.default_task()
+    else:
+        normalize_task_pr_fields(task, manager.git.pr_search_url)
 
     handoff_path = manager.handoff_path_for(task)
     handoff_available = handoff_path.exists()
