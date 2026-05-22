@@ -483,6 +483,15 @@ def build_pr_text(task: dict[str, Any], manager: SidecarManager, args: argparse.
     return title, body
 
 
+def pr_base_for_create(task: dict[str, Any], manager: SidecarManager, explicit_base: str | None) -> str:
+    base = explicit_base or task.get("baseBranch") or manager.git.base_branch
+    base = (base or "").strip()
+    current_branch = (task.get("branch") or manager.git.branch or "").strip()
+    if not base or base == "unknown" or base == current_branch:
+        return ""
+    return base
+
+
 def gh_status() -> dict[str, Any]:
     gh_path = shutil.which("gh")
     if not gh_path:
@@ -544,8 +553,9 @@ def try_create_pr(
         "--body",
         body,
     ]
-    if args.base:
-        command.extend(["--base", args.base])
+    pr_base = pr_base_for_create(task, manager, args.base)
+    if pr_base:
+        command.extend(["--base", pr_base])
     if args.draft:
         command.append("--draft")
 
