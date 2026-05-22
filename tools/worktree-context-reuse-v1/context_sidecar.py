@@ -183,7 +183,7 @@ class SidecarManager:
         if rc != 0 or not base_branch:
             base_branch = "main"
         if "/" in base_branch:
-            base_branch = base_branch.split("/")[-1]
+            base_branch = base_branch.split("/", 1)[1]
 
         rc, recent_commits_raw, _ = run_git(
             ["log", "--oneline", "-5"],
