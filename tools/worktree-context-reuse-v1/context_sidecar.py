@@ -783,7 +783,29 @@ def cmd_start_feature(args: argparse.Namespace) -> int:
     tasks = payload.get("tasks", [])
     branch_matches = [item for item in tasks if item.get("branch") == manager.git.branch]
     worktree_matches = [item for item in tasks if item.get("worktreePath") == str(manager.git.worktree_path)]
-    candidates = sorted(branch_matches or worktree_matches, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    candidates = sorted(branch_matches, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    if not candidates and worktree_matches:
+        conflicts = [item.get("taskId", "<unknown>") for item in worktree_matches]
+        task = sorted(worktree_matches, key=lambda item: item.get("updatedAt", ""), reverse=True)[0]
+        snapshot = manager.task_snapshot(task, conflicts)
+        snapshot.update(
+            {
+                "createdOrUpdated": False,
+                "requestedBranch": manager.git.branch,
+                "resolution": "Current worktree already has an active task for another branch; finish or hand off that task before starting a new branch in this worktree.",
+            }
+        )
+        manager.log_event(
+            "start",
+            task_id=task["taskId"],
+            started_at=started_at,
+            sidecar_hit=True,
+            handoff_available=snapshot["handoffAvailable"],
+            conflict=True,
+            requestedBranch=manager.git.branch,
+        )
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
     task = candidates[0] if candidates else None
     conflicts = [item.get("taskId", "<unknown>") for item in candidates[1:]]
     sidecar_hit = task is not None
