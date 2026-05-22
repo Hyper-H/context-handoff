@@ -184,11 +184,6 @@ class SidecarManager:
         status_lines = [line for line in status_raw.splitlines() if line] if rc == 0 else []
         touched_files = [line[3:] for line in status_lines if len(line) >= 4]
 
-        pr_url = ""
-        rc, remote_url, _ = run_git(["remote", "get-url", "origin"], repo_root_path)
-        if rc == 0 and remote_url:
-            pr_url = self._guess_pr_url(remote_url, branch)
-
         return GitContext(
             repo_root=repo_root_path,
             branch=branch,
@@ -197,18 +192,8 @@ class SidecarManager:
             recent_commits=recent_commits,
             touched_files=touched_files,
             git_status_summary=status_lines,
-            pr_url=pr_url,
+            pr_url="",
         )
-
-    def _guess_pr_url(self, remote_url: str, branch: str) -> str:
-        normalized = remote_url.strip()
-        if normalized.startswith("git@github.com:"):
-            normalized = normalized.replace("git@github.com:", "https://github.com/")
-        if normalized.endswith(".git"):
-            normalized = normalized[:-4]
-        if normalized.startswith("https://github.com/") and branch and branch != "unknown":
-            return f"{normalized}/pulls?q=is%3Apr+head%3A{branch}"
-        return ""
 
     def ensure_layout(self) -> None:
         self.sidecar_root.mkdir(parents=True, exist_ok=True)

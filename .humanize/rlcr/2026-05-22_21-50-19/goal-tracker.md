@@ -138,3 +138,4 @@ The implementation must keep MCP out of scope for V2. The sidecar schema and CLI
 <!-- Issues discovered during implementation -->
 | Issue | Discovered Round | Blocking AC | Resolution Path |
 |-------|-----------------|-------------|-----------------|
+| `finish-feature` can report a guessed GitHub PR search URL as `prUrl` even when no PR is known or created. | 0 review | AC-4 | Stop deriving `GitContext.pr_url` from the remote/branch search URL. Keep `prUrl` empty unless supplied by `--pr-url` or returned by successful `gh pr create`, then rerun the PR fallback smoke test with a GitHub remote and no PR. |
