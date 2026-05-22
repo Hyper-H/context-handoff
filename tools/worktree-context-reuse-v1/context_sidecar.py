@@ -179,10 +179,7 @@ class SidecarManager:
         if rc != 0 or not branch:
             branch = "unknown"
 
-        rc, base_branch, _ = run_git(
-            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
-            repo_root_path,
-        )
+        rc, base_branch, _ = run_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repo_root_path)
         if rc != 0 or not base_branch:
             base_branch = "main"
         if "/" in base_branch:
@@ -484,8 +481,10 @@ def build_pr_text(task: dict[str, Any], manager: SidecarManager, args: argparse.
 
 
 def pr_base_for_create(task: dict[str, Any], manager: SidecarManager, explicit_base: str | None) -> str:
-    base = (explicit_base or "").strip()
-    if not base:
+    base = explicit_base or task.get("baseBranch") or manager.git.base_branch
+    base = (base or "").strip()
+    current_branch = (task.get("branch") or manager.git.branch or "").strip()
+    if not base or base == "unknown" or base == current_branch:
         return ""
     return base
 
