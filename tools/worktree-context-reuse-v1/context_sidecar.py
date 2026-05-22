@@ -346,6 +346,8 @@ class SidecarManager:
 
         if getattr(args, "task_id", None):
             task["taskId"] = slugify(args.task_id)
+        elif task.get("branch") and task.get("branch") != self.git.branch:
+            task["taskId"] = self.task_id_for_branch()
         if getattr(args, "status", None):
             task["status"] = args.status
         elif not task.get("status"):
@@ -758,13 +760,11 @@ def cmd_start_feature(args: argparse.Namespace) -> int:
     manager = SidecarManager(Path(args.worktree or os.getcwd()))
     payload = manager.load_active_tasks()
     tasks = payload.get("tasks", [])
-    task = next((item for item in tasks if item.get("branch") == manager.git.branch), None)
-    conflicts = [
-        item.get("taskId", "<unknown>")
-        for item in tasks
-        if item.get("worktreePath") == str(manager.git.worktree_path)
-        and item.get("branch") != manager.git.branch
-    ]
+    branch_matches = [item for item in tasks if item.get("branch") == manager.git.branch]
+    worktree_matches = [item for item in tasks if item.get("worktreePath") == str(manager.git.worktree_path)]
+    candidates = branch_matches or sorted(worktree_matches, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    task = candidates[0] if candidates else None
+    conflicts = [item.get("taskId", "<unknown>") for item in candidates[1:]]
     sidecar_hit = task is not None
     task = manager.upsert_task(payload, task, args)
     manager.save_active_tasks(payload)
