@@ -1,5 +1,5 @@
 ---
-current_round: 1
+current_round: 2
 max_iterations: 20
 codex_model: gpt-5.5
 codex_effort: high
@@ -11,7 +11,7 @@ plan_tracked: true
 start_branch: codex/context-handoff-v2
 base_branch: main
 base_commit: 5978ea27b9677fe8505449fd5d3b6b113ab6cdcc
-review_started: false
+review_started: true
 ask_codex_question: true
 session_id:
 agent_teams: false

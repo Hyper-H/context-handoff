@@ -71,6 +71,13 @@ def unique_nonempty(values: list[str], limit: int | None = None) -> list[str]:
     return result
 
 
+def safe_filename_label(value: str, fallback: str) -> str:
+    value = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
+    value = re.sub(r"-{2,}", "-", value)
+    value = value.strip(".-_")
+    return value or fallback
+
+
 def find_git_executable() -> str | None:
     env_override = os.environ.get("CODEX_GIT_EXE")
     if env_override and Path(env_override).exists():
@@ -111,6 +118,13 @@ def run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
     except FileNotFoundError:
         return 127, "", "git executable not found"
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+
+
+def detect_git_repo(worktree: Path) -> tuple[bool, str]:
+    rc, repo_root, _ = run_git(["rev-parse", "--show-toplevel"], worktree)
+    if rc != 0 or not repo_root:
+        return False, ""
+    return True, str(Path(repo_root).resolve())
 
 
 def read_json(path: Path, default: Any) -> Any:
@@ -906,7 +920,7 @@ def cmd_weekly_report(args: argparse.Namespace) -> int:
     manager = SidecarManager(Path(args.worktree or os.getcwd()))
     payload = manager.load_active_tasks()
     state = manager.write_project_state(payload.get("tasks", []))
-    period = args.period or datetime.now().strftime("%G-W%V")
+    period = safe_filename_label(args.period or datetime.now().strftime("%G-W%V"), "weekly-report")
     report_name = f"{period}-{manager.project_id}.md"
     report_path = manager.reports_dir / report_name
     report_path.write_text(build_weekly_report(manager, state, period), encoding="utf-8")
@@ -935,14 +949,30 @@ def cmd_weekly_report(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    manager = SidecarManager(Path(args.worktree or os.getcwd()))
+    worktree = Path(args.worktree or os.getcwd())
+    manager = SidecarManager(worktree)
     git_executable = find_git_executable()
+    git_repo_ok, git_repo_root = detect_git_repo(worktree)
     gh = gh_status()
+    v2_paths = [
+        manager.active_tasks_path,
+        manager.project_state_path,
+        manager.handoffs_dir,
+        manager.archive_dir,
+        manager.reports_dir,
+        manager.events_path,
+    ]
+    existing_v2_paths = [path for path in v2_paths if path.exists()]
+    sidecar_layout_ok = all(path.exists() for path in v2_paths)
     checks = [
         {"name": "python", "ok": True, "detail": sys.version.split()[0]},
         {"name": "git", "ok": bool(git_executable), "detail": git_executable or "not found"},
-        {"name": "git-repository", "ok": manager.git.repo_root.exists(), "detail": str(manager.git.repo_root)},
-        {"name": "sidecar-layout", "ok": manager.sidecar_root.exists(), "detail": str(manager.sidecar_root)},
+        {"name": "git-repository", "ok": git_repo_ok, "detail": git_repo_root or "not a git repository"},
+        {
+            "name": "sidecar-layout",
+            "ok": sidecar_layout_ok,
+            "detail": f"{len(existing_v2_paths)}/{len(v2_paths)} V2 paths exist under {manager.sidecar_root}",
+        },
         {"name": "gh-installed", "ok": gh["available"], "detail": gh["path"] or gh["message"]},
         {"name": "gh-authenticated", "ok": gh["authenticated"], "detail": gh["message"]},
     ]

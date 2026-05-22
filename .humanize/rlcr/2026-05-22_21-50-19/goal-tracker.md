@@ -104,13 +104,14 @@ The implementation must keep MCP out of scope for V2. The sidecar schema and CLI
 ## MUTABLE SECTION
 <!-- Update each round with justification for changes -->
 
-### Plan Version: 1 (Updated: Round 0)
+### Plan Version: 2 (Updated: Round 1)
 
 #### Plan Evolution Log
 <!-- Document any changes to the plan with justification -->
 | Round | Change | Reason | Impact on AC |
 |-------|--------|--------|--------------|
 | 0 | Initial plan | - | - |
+| 1 | Resolved guessed PR URL review finding. | Codex verified `GitContext.pr_url` no longer derives GitHub PR search URLs, and smoke tests showed unknown PRs remain empty while finish/archive still succeeds. | Completes AC-4 hybrid PR behavior without changing scope. |
 
 #### Active Tasks
 <!-- Map each task to its target Acceptance Criterion and routing tag -->
@@ -121,13 +122,13 @@ The implementation must keep MCP out of scope for V2. The sidecar schema and CLI
 <!-- Only move tasks here after Codex verification -->
 | AC | Task | Completed Round | Verified Round | Evidence |
 |----|------|-----------------|----------------|----------|
-| AC-1..AC-7 | Initialize Goal Tracker from the V2 plan | 0 | pending verification | Populated full immutable acceptance criteria and active task map from `specs/context-handoff-v2-humanize-plan.md`. |
-| AC-2, AC-3, AC-6 | Expand sidecar layout and lifecycle CLI commands | 0 | pending verification | Added V2 sidecar paths, project-state refresh, lifecycle events, and start/resume/finish/project-status commands in `context_sidecar.py`. |
-| AC-2, AC-3, AC-5, AC-6 | Add weekly report and project status outputs | 0 | pending verification | Added compact `project-status` output and sidecar Markdown `weekly-report` generation. |
-| AC-3, AC-4 | Add hybrid PR fallback and non-mutating doctor/setup behavior | 0 | pending verification | Added explicit `finish-feature --create-pr` path, generated PR text fallback, and read-only `doctor`. |
-| AC-1, AC-5, AC-7 | Add unified conversation-first skill and compatibility docs | 0 | pending verification | Added `skills/context-handoff/SKILL.md`; updated README files with conversation-first V2 usage and compatibility notes. |
-| AC-5, AC-6, AC-7 | Add research scaffold and README updates | 0 | pending verification | Added `docs/research/context-handoff-v2-benchmark.md`; documented project hub and weekly report behavior. |
-| AC-1..AC-7 | Run smoke validation and fix review findings | 0 | pending verification | Passed `py_compile`, CLI help, read-only `doctor`, and temporary git repo smoke tests covering setup/start/resume/handoff/project-status/weekly-report/finish fallback/no repo sidecar leak. |
+| AC-1..AC-7 | Initialize Goal Tracker from the V2 plan | 0 | 1 | Populated full immutable acceptance criteria and active task map from `specs/context-handoff-v2-humanize-plan.md`; Codex re-read tracker and original plan in Round 1. |
+| AC-2, AC-3, AC-6 | Expand sidecar layout and lifecycle CLI commands | 0 | 1 | Added V2 sidecar paths, project-state refresh, lifecycle events, and start/resume/finish/project-status commands in `context_sidecar.py`; Round 1 smoke exercised setup/start/resume/handoff/project-status/finish. |
+| AC-2, AC-3, AC-5, AC-6 | Add weekly report and project status outputs | 0 | 1 | Added compact `project-status` output and sidecar Markdown `weekly-report` generation; Round 1 smoke verified report under sidecar `reports/` and no weekly narrative in `project-state.json`. |
+| AC-3, AC-4 | Add hybrid PR fallback and non-mutating doctor/setup behavior | 0 | 1 | Round 1 verified read-only `doctor`, empty unknown `prUrl`, normal finish without PR URL, and `finish-feature --create-pr` fallback with missing `gh` still archives the task. |
+| AC-1, AC-5, AC-7 | Add unified conversation-first skill and compatibility docs | 0 | 1 | `skills/context-handoff/SKILL.md`, README, and Chinese README document conversation-first usage, project hub behavior, weekly reports, setup/doctor, and V1 compatibility. |
+| AC-5, AC-6, AC-7 | Add research scaffold and README updates | 0 | 1 | `docs/research/context-handoff-v2-benchmark.md` documents future comparisons and lightweight objective signals without mandatory scoring or token measurement. |
+| AC-1..AC-7 | Run smoke validation and fix review findings | 0 | 1 | Round 1 passed `py_compile`, `doctor`, and isolated temp repo smoke covering GitHub remote with no PR: start/resume/finish/fallback kept `prUrl` empty, active task count reached 0, report stayed in sidecar, and no repo-local `.codex` leaked. |
 
 ### Explicitly Deferred
 <!-- Items here require strong justification -->
@@ -138,4 +139,3 @@ The implementation must keep MCP out of scope for V2. The sidecar schema and CLI
 <!-- Issues discovered during implementation -->
 | Issue | Discovered Round | Blocking AC | Resolution Path |
 |-------|-----------------|-------------|-----------------|
-| `finish-feature` can report a guessed GitHub PR search URL as `prUrl` even when no PR is known or created. | 0 review | AC-4 | Stop deriving `GitContext.pr_url` from the remote/branch search URL. Keep `prUrl` empty unless supplied by `--pr-url` or returned by successful `gh pr create`, then rerun the PR fallback smoke test with a GitHub remote and no PR. |
