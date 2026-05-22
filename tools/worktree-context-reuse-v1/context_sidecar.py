@@ -762,7 +762,7 @@ def cmd_start_feature(args: argparse.Namespace) -> int:
     tasks = payload.get("tasks", [])
     branch_matches = [item for item in tasks if item.get("branch") == manager.git.branch]
     worktree_matches = [item for item in tasks if item.get("worktreePath") == str(manager.git.worktree_path)]
-    candidates = branch_matches or sorted(worktree_matches, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    candidates = sorted(branch_matches or worktree_matches, key=lambda item: item.get("updatedAt", ""), reverse=True)
     task = candidates[0] if candidates else None
     conflicts = [item.get("taskId", "<unknown>") for item in candidates[1:]]
     sidecar_hit = task is not None
