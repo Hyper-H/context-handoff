@@ -1105,7 +1105,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_setup(args: argparse.Namespace) -> int:
     return cmd_init(args)
-    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
