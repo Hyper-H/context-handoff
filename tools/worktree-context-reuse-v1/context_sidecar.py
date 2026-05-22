@@ -183,6 +183,8 @@ class SidecarManager:
 
         base_branch = self._remote_default_branch(repo_root_path, "origin")
         if not base_branch:
+            base_branch = self._current_upstream_branch(repo_root_path)
+        if not base_branch:
             rc, upstream_remote, _ = run_git(["config", f"branch.{branch}.remote"], repo_root_path)
             if rc == 0 and upstream_remote and upstream_remote != "origin":
                 base_branch = self._remote_default_branch(repo_root_path, upstream_remote)
@@ -220,6 +222,12 @@ class SidecarManager:
             return ""
         prefix = f"{remote}/"
         return remote_head[len(prefix) :] if remote_head.startswith(prefix) else remote_head
+
+    def _current_upstream_branch(self, repo_root_path: Path) -> str:
+        rc, upstream, _ = run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], repo_root_path)
+        if rc != 0 or not upstream:
+            return ""
+        return upstream.split("/", 1)[1] if "/" in upstream else upstream
 
     def _guess_pr_search_url(self, remote_url: str, branch: str) -> str:
         normalized = remote_url.strip()
