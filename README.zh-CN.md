@@ -2,123 +2,89 @@
 
 中文 | [English](./README.md)
 
-`context-handoff` 是一套轻量的上下文复用与交接工作流，用来降低多 worktree、多 thread 的 feature/PR 开发中的上下文重建成本。它由仓库内稳定事实、本机 sidecar 状态层，以及 intake/handoff skills 组成。
+`context-handoff` 是一个面向 AI 辅助 feature 生命周期的轻量项目/任务状态层。V2 的日常入口是一个统一的对话式 skill，本机 sidecar 负责保存紧凑的动态状态，并且这些状态不进入 feature PR。
 
 ## 它解决什么问题
 
-- 新 thread 反复重扫同一个仓库
-- 多个 worktree 和 agent thread 之间容易丢失任务状态
-- feature 或 PR 的交接噪声大、不稳定、成本高
+- 新 thread 反复重扫同一个仓库。
+- 多 worktree、多 agent thread 之间容易丢任务状态。
+- feature 交接、完成归档、周报输出不稳定。
+- 动态 agent 状态容易误写进仓库文档或 PR。
 
-## 核心思路
+## 核心模型
 
-把项目上下文拆成三层：
+- `docs/agent/`：应该进入版本控制的稳定仓库事实。
+- 本机 sidecar：位于 `%USERPROFILE%\.codex\projects\<project-id>\` 的动态项目/任务状态。
+- `skills/context-handoff`：V2 的统一对话式生命周期 skill。
+- `worktree-intake` 和 `worktree-handoff`：继续可用的 V1 兼容入口。
 
-- `docs/agent/`
-  放入版本控制的稳定仓库事实
-- local sidecar
-  不进入 feature PR 的动态任务状态
-- `worktree-intake` / `worktree-handoff`
-  用自然语言触发的 skill 入口，用来恢复和保存当前任务上下文
+V2 不需要 MCP。sidecar schema 和 CLI 会保持简单，方便以后再包 MCP，但这个 MVP 的成功标准是 skill + CLI + sidecar 能跑通。
 
-## 实际应该怎么用
-
-这套方案的主要入口应该是对话，而不是手动敲命令。
-
-理想中的实际使用方式应该像这样：
-
-- `接手这个 worktree，告诉我现在做到哪了`
-- `继续这个 feature，恢复一下当前上下文`
-- `我准备提 PR，先同步一下当前状态并做 handoff`
-- `结束这轮开发，把 next step 和记交接都存一下`
-- `这个任务做完了，归档当前任务状态`
-
-也就是说，skill 应该在后台自动同步 sidecar。Python 脚本是 skill 背后的实现层，同时也保留为测试和调试时的备用入口。
-
-## 仓库结构
-
-```text
-docs/
-  agent/
-    project-map.md
-    conventions.md
-    common-commands.md
-skills/
-  worktree-intake/
-  worktree-handoff/
-tools/
-  worktree-context-reuse-v1/
-    context_sidecar.py
-    templates/
-specs/
-  multi-worktree-thread-handoff-v1.md
-worktree-context-reuse-v1-usage.md
-```
-
-## 本机 Sidecar 结构
-
-工具默认把本机状态写到：
+## Sidecar 结构
 
 ```text
 %USERPROFILE%\.codex\projects\<project-id>\
   active-tasks.json
+  project-state.json
   handoffs\
   archive\
+  reports\
   events.jsonl
 ```
 
-这些状态是本机私有的，不应该进 feature PR。
+`active-tasks.json` 只保存 active-like 任务。`project-state.json` 保存给 agent 使用的紧凑机器可读状态。较长的人类叙事应该放在 Markdown handoff 和 weekly report 里，不混进 project-state JSON。
 
-## 对话优先的快速开始
+## 对话优先用法
 
-1. 先补齐 `docs/agent/` 下的稳定事实文档
-2. 把两个 skill 安装或复制到本机 Codex skill 目录
-3. 在真实 git worktree 里，优先直接对 agent 说：
-   - `Use $worktree-intake to recover the current worktree context and tell me the next step.`
-4. 每轮工作结束前，对 agent 说：
-   - `Use $worktree-handoff to save the current worktree status and prepare the next agent handoff.`
-5. 任务彻底完成后，让 agent 归档当前任务
+日常使用优先通过统一 skill：
 
-## Skill 用法
+- `Use $context-handoff to start this feature: add V2 lifecycle state.`
+- `Use $context-handoff to resume this worktree and tell me the next step.`
+- `Use $context-handoff to save a handoff before I stop today.`
+- `Use $context-handoff to finish this feature and generate PR text.`
+- `Use $context-handoff to show project status from the project hub thread.`
+- `Use $context-handoff to create this week's project report.`
 
-本地安装后，可以直接这样对 Codex 说：
+agent 应该在后台调用 sidecar CLI，然后用自然语言总结关键结果。除非用户明确要求，不要直接粘贴很长的 JSON。
 
-- `Use $worktree-intake to recover the current worktree context and tell me the next step.`
-- `Use $worktree-handoff to save the current worktree status and prepare the next agent handoff.`
+## Project Hub Thread
 
-也可以直接说更自然的话，比如：
+project hub thread 是一个长期线程，用于项目状态、规划和短周报通知。它不是 agent 的主要上下文输入。agent 恢复工作时仍应优先使用紧凑 sidecar 状态和最新 handoff。
 
-- `接手当前 worktree，恢复一下上下文`
-- `继续这个分支，告诉我下一步做什么`
-- `提 PR 前先帮我同步当前状态`
-- `结束今天这轮，给下一个 agent 留个交接`
-- `这个任务结束了，归档掉当前状态`
+weekly report 是写入 sidecar `reports/` 目录的人类可读 Markdown。手动运行 `weekly-report` 不依赖 automation。如果要配置周期 automation，请把通知绑定到当前 project hub thread，并默认只发简短通知和报告路径，不粘贴完整报告。
 
 ## 底层 CLI
 
-仓库里仍然保留了 Python CLI，方便测试、调试和非 skill 集成：
+Python CLI 是 skill 的实现层，也可用于测试、调试和非 skill 集成：
+
+```powershell
+python tools\worktree-context-reuse-v1\context_sidecar.py setup
+python tools\worktree-context-reuse-v1\context_sidecar.py doctor
+python tools\worktree-context-reuse-v1\context_sidecar.py start-feature --goal "Add lifecycle sidecar"
+python tools\worktree-context-reuse-v1\context_sidecar.py resume-feature
+python tools\worktree-context-reuse-v1\context_sidecar.py handoff --next-step "Run smoke tests"
+python tools\worktree-context-reuse-v1\context_sidecar.py finish-feature
+python tools\worktree-context-reuse-v1\context_sidecar.py project-status
+python tools\worktree-context-reuse-v1\context_sidecar.py weekly-report
+```
+
+兼容命令仍然保留：
 
 ```powershell
 python tools\worktree-context-reuse-v1\context_sidecar.py init
 python tools\worktree-context-reuse-v1\context_sidecar.py snapshot
 python tools\worktree-context-reuse-v1\context_sidecar.py intake
-python tools\worktree-context-reuse-v1\context_sidecar.py handoff ...
 python tools\worktree-context-reuse-v1\context_sidecar.py archive
 ```
 
-## 当前验证状态
+## PR 完成策略
 
-这个仓库里的 v1 实现目前已经验证过：
+`finish-feature` 即使没有 PR URL 也会归档当前任务。默认行为是生成 PR title/body 文案。如果你显式传入 `--create-pr`，并且本机已经安装且登录了 `gh`，它会尝试创建 PR 并记录 URL。如果 `gh` 缺失或未登录，它会保留空的 `prUrl`、继续完成归档，并输出设置指导。
 
-- 非 git 回退场景
-- 一个临时真实 git 仓库中的 smoke test：
-  - `snapshot`
-  - `handoff`
-  - `intake`
-  - `archive`
+工具不会静默安装 GitHub CLI、不会替你登录账号，也不会偷偷修改全局 Codex 设置。
 
-## 说明
+## Setup 和 Doctor
 
-- 这个项目在 v1 明确不优先做自定义 MCP
-- 当前设计优先服务个人工作流，之后再考虑共享或实验评估
-- `events.jsonl` 只是轻量实验留痕，不是正式 benchmark
+`doctor` 只检查环境准备情况，不修改全局状态。`setup` 用来创建本机 sidecar 结构。其他开发者 clone 仓库后只需要 Python、Git 和 skill 文件即可开始使用；GitHub CLI 是可选项，只用于自动创建 PR。
+
+动态 sidecar 状态是本机私有状态，不应该进入 feature PR。
