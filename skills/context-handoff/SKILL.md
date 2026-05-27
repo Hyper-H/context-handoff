@@ -9,11 +9,17 @@ Use this skill when the user wants to start, resume, hand off, finish, inspect, 
 
 ## Implementation Layer
 
-Run the CLI from the repository root:
+Use the bundled sidecar CLI in this skill package. Do not ask the user to paste a CLI path during normal use.
+
+Run actions through:
 
 ```powershell
-python tools\worktree-context-reuse-v1\context_sidecar.py <action>
+python scripts\context_sidecar.py <action> --worktree <current-worktree>
 ```
+
+If the current working directory is the installed skill directory, use the relative script path above. If running from another directory, resolve `scripts\context_sidecar.py` relative to this `SKILL.md` file and pass the user's current repository or worktree through `--worktree`.
+
+The user should only need to say `Use $context-handoff ...`; CLI path resolution is the agent's responsibility.
 
 The sidecar stays local at:
 
@@ -21,7 +27,7 @@ The sidecar stays local at:
 %USERPROFILE%\.codex\projects\<project-id>\
 ```
 
-Do not write dynamic task state into tracked repo docs. Do not require MCP for this V2 workflow.
+Do not write dynamic task state into tracked repo docs. Do not require MCP for this workflow.
 
 ## Actions
 
@@ -36,6 +42,7 @@ Do not write dynamic task state into tracked repo docs. Do not require MCP for t
 
 ## Routing Guide
 
+- Before the first action in a project, run the bundled CLI with the current worktree path. Prefer `doctor` before `setup` when the project has not used the sidecar before.
 - If the user says "start this feature", "track this branch", or gives a feature goal, run `start-feature` with `--goal` and optional `--next-step`.
 - If the user says "take over", "resume", "where are we", or "continue this worktree", run `resume-feature`, then summarize only the useful context and next step.
 - If the user is ending a session or passing work to another agent, run `handoff` with concrete done/not-done/validation fields.
@@ -43,9 +50,17 @@ Do not write dynamic task state into tracked repo docs. Do not require MCP for t
 - If the user asks from a project hub thread, use `project-status` for compact status and `weekly-report` for a human update.
 - If setup is uncertain, run `doctor` first. Explain any missing optional tools without installing them.
 
-## Compatibility
+## Backfill Guidance
 
-The existing `worktree-intake` and `worktree-handoff` skills remain valid compatibility entry points. Prefer this unified skill for V2 lifecycle work, but do not break established V1 prompts.
+When initializing an existing project, git history can provide objective facts such as branches, commits, touched files, and changed areas. Git history alone cannot reliably recover intent, design decisions, validation status, blockers, or what should happen next.
+
+For a useful first sidecar state, combine:
+
+- Git facts from `snapshot`, `start-feature`, and recent commits.
+- Current thread or user-provided context for goal, current status, next step, blocker, and validation.
+- Existing PR descriptions, issue text, or release notes when available.
+
+If semantic context is missing, write a provisional task state and say what is missing rather than pretending the git history is enough.
 
 ## Output Style
 

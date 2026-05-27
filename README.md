@@ -2,25 +2,74 @@
 
 [中文](./README.zh-CN.md) | English
 
-`context-handoff` is a lightweight project/task state layer for AI-assisted feature lifecycle work. V2 keeps the normal interface conversational through one primary skill, while a local sidecar stores compact dynamic state outside feature PRs.
+`context-handoff` is a self-contained Codex skill for AI-assisted feature lifecycle state. It helps agents resume work across branches, worktrees, and threads without repeatedly rebuilding the same project context.
+
+The normal interface is conversation:
+
+```text
+Use $context-handoff to resume this worktree.
+```
+
+The skill bundles its own Python sidecar CLI under `skills/context-handoff/scripts/`, so users do not need to know where the CLI lives.
 
 ## What It Solves
 
-- New threads repeatedly re-scan the same repository.
-- Parallel worktrees and agent threads lose track of current task status.
-- Feature handoff, finish/archive, and weekly project reporting become inconsistent.
-- Dynamic agent state accidentally leaks into repository docs or PRs.
+- New agent threads repeatedly scan the same repository.
+- Feature branches, worktrees, and threads lose task status.
+- Handoff, finish/archive, and weekly reporting become inconsistent.
+- Dynamic agent state leaks into repository docs or feature PRs.
 
-## Core Model
+## Install
 
-- `docs/agent/`: stable repository facts that belong in version control.
-- Local sidecar: dynamic project/task state under `%USERPROFILE%\.codex\projects\<project-id>\`.
-- `skills/context-handoff`: the V2 conversation-first lifecycle skill.
-- `worktree-intake` and `worktree-handoff`: V1-compatible skill entry points that remain usable.
+Clone this repository, then run:
 
-The V2 workflow does not require MCP. The sidecar schema and CLI stay simple enough to wrap later, but the shareable MVP is a working skill + CLI + sidecar workflow.
+```powershell
+python install.py
+```
 
-## Sidecar Layout
+This copies the complete skill package to:
+
+```text
+%USERPROFILE%\.codex\skills\context-handoff\
+```
+
+Restart or refresh Codex if the skill list does not update immediately.
+
+The installer only copies the skill package. It does not install GitHub CLI, authenticate accounts, or change global Codex configuration.
+
+## Use
+
+In any git project or worktree, ask Codex:
+
+```text
+Use $context-handoff to run doctor/setup for this project.
+```
+
+Then use natural prompts:
+
+```text
+Use $context-handoff to start this feature. Goal: improve the dashboard UI.
+```
+
+```text
+Use $context-handoff to resume this worktree and tell me the immediate next step.
+```
+
+```text
+Use $context-handoff to save a handoff before I stop today.
+```
+
+```text
+Use $context-handoff to finish this feature and generate PR text.
+```
+
+```text
+Use $context-handoff to generate last week's report.
+```
+
+## Sidecar State
+
+Dynamic state is local-only and stays outside your repository:
 
 ```text
 %USERPROFILE%\.codex\projects\<project-id>\
@@ -32,59 +81,37 @@ The V2 workflow does not require MCP. The sidecar schema and CLI stay simple eno
   events.jsonl
 ```
 
-`active-tasks.json` contains active-like tasks only. `project-state.json` is compact machine-readable status for agents. Long human-facing text belongs in Markdown handoffs and weekly reports, not in project-state JSON.
+`project-state.json` is compact machine-readable status for agents. Handoffs and weekly reports are Markdown for humans. Stable repository facts can still live in tracked `docs/agent/` files.
 
-## Conversation-First Usage
+## Main Actions
 
-Use the unified skill in normal work:
+- `doctor`: Check Python, Git, sidecar, and optional GitHub CLI readiness.
+- `setup`: Create the local sidecar layout.
+- `start-feature`: Track the current branch/worktree as an active task.
+- `resume-feature`: Recover compact context for the current worktree.
+- `handoff`: Save incomplete work and the next step.
+- `finish-feature`: Archive the task and generate PR title/body; create a PR only when explicitly requested and GitHub CLI is ready.
+- `project-status`: Summarize current project state for a project hub thread.
+- `weekly-report`: Write a human-facing Markdown report under the sidecar `reports/` directory.
 
-- `Use $context-handoff to start this feature: add V2 lifecycle state.`
-- `Use $context-handoff to resume this worktree and tell me the next step.`
-- `Use $context-handoff to save a handoff before I stop today.`
-- `Use $context-handoff to finish this feature and generate PR text.`
-- `Use $context-handoff to show project status from the project hub thread.`
-- `Use $context-handoff to create this week's project report.`
+V1 `worktree-intake` and `worktree-handoff` have been merged into the unified `context-handoff` skill as `resume-feature` and `handoff`.
 
-The agent should run the sidecar CLI in the background, summarize the useful result, and avoid pasting long JSON unless you ask for it.
+## Backfilling Existing Projects
 
-## Project Hub Thread
+Git history can recover objective facts such as branches, commits, and touched files. It cannot reliably recover intent, design decisions, blockers, validation status, or the correct next step.
 
-A project hub thread is a long-lived conversation for project status, planning, and short weekly report notifications. It is not the primary source of agent context. Agents should still use compact sidecar state plus the latest handoff when resuming work.
+For the first sidecar state in an existing project, combine:
 
-Weekly reports are human-facing Markdown files in the sidecar `reports/` directory. Manual `weekly-report` works without automation. If you add a recurring automation, bind it to the current project hub thread and have it post a short notification with the report path instead of pasting the full report by default.
+- Git facts from the current worktree.
+- Current thread or user-provided context.
+- Existing PR, issue, or release notes when available.
 
-## Low-Level CLI
+After that first backfill, ongoing `start-feature`, `handoff`, and `finish-feature` actions keep future context cheaper to recover.
 
-The Python CLI is for skills, testing, debugging, and non-skill integrations:
+## GitHub PR Behavior
 
-```powershell
-python tools\worktree-context-reuse-v1\context_sidecar.py setup
-python tools\worktree-context-reuse-v1\context_sidecar.py doctor
-python tools\worktree-context-reuse-v1\context_sidecar.py start-feature --goal "Add lifecycle sidecar"
-python tools\worktree-context-reuse-v1\context_sidecar.py resume-feature
-python tools\worktree-context-reuse-v1\context_sidecar.py handoff --next-step "Run smoke tests"
-python tools\worktree-context-reuse-v1\context_sidecar.py finish-feature
-python tools\worktree-context-reuse-v1\context_sidecar.py project-status
-python tools\worktree-context-reuse-v1\context_sidecar.py weekly-report
-```
+GitHub CLI is optional. `finish-feature` always works without a PR URL. If `gh` is installed and authenticated, the skill can create a PR when the user explicitly asks. Otherwise it generates PR title/body text and records local completion state.
 
-Compatibility commands remain available:
+## Research Notes
 
-```powershell
-python tools\worktree-context-reuse-v1\context_sidecar.py init
-python tools\worktree-context-reuse-v1\context_sidecar.py snapshot
-python tools\worktree-context-reuse-v1\context_sidecar.py intake
-python tools\worktree-context-reuse-v1\context_sidecar.py archive
-```
-
-## PR Finish Behavior
-
-`finish-feature` archives the active task even when no PR URL exists. It generates PR title/body text by default. If you explicitly pass `--create-pr` and `gh` is installed and authenticated, it attempts to create the PR and records the resulting URL. If `gh` is missing or unauthenticated, it leaves `prUrl` empty, finishes the task, and reports setup guidance.
-
-The tool never installs GitHub CLI, authenticates accounts, or changes global Codex settings silently.
-
-## Setup And Doctor
-
-Run `doctor` to check readiness without mutating global state. Run `setup` to create the local sidecar layout. Another developer cloning the repository only needs Python, Git, and the skill files; GitHub CLI is optional and only needed for automatic PR creation.
-
-Dynamic sidecar state is local-only and should stay out of feature PRs.
+`events.jsonl` records lightweight lifecycle events for future evaluation. It is not a full benchmark by itself. See [docs/research/context-handoff-v2-benchmark.md](./docs/research/context-handoff-v2-benchmark.md) for the planned comparison between no shared context, stable repo docs only, and sidecar + handoff.

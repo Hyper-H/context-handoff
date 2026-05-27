@@ -1,4 +1,0 @@
-interface:
-  display_name: "Worktree Handoff"
-  short_description: "Write the latest feature handoff and update sidecar task state."
-  default_prompt: "Use $worktree-handoff to save the current worktree status and prepare the next agent handoff."

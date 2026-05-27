@@ -1,4 +1,0 @@
-interface:
-  display_name: "Worktree Intake"
-  short_description: "Recover current feature context from sidecar and stable docs."
-  default_prompt: "Use $worktree-intake to recover the current worktree context and tell me the next step."
