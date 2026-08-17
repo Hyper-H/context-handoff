@@ -908,7 +908,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
       <div class="mark" aria-label="Agent Workflow Hub">AW</div>
       <button class="active" type="button" title="Project Hub">H</button>
       <button type="button" title="Tasks">T</button>
-      <button type="button" title="Worktrees">W</button>
+      <button type="button" title="Environments">E</button>
       <button type="button" title="Audit">A</button>
     </aside>
 
@@ -920,7 +920,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
           <p id="projectSubtitle" class="subtitle"></p>
         </div>
         <div class="toolbar">
-          <input id="search" class="search" type="search" placeholder="筛选 taskId / branch / worktreePath / thread role / status" aria-label="筛选项目关系">
+          <input id="search" class="search" type="search" placeholder="筛选 taskId / branch / environment / thread role / status" aria-label="筛选项目关系">
           <div class="mode-switch" aria-label="视图切换">
             <button id="mapMode" class="active" type="button">关系图</button>
             <button id="matrixMode" type="button">矩阵检查</button>
@@ -937,7 +937,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Relationship Map</p>
-                <h2 id="mapTitle">Task -> Worktree -> Thread</h2>
+                <h2 id="mapTitle">Task -> Thread -> Environment</h2>
               </div>
               <span class="chip">Project 是页面上下文，dependency 不进入 ownership 图</span>
             </div>
@@ -951,12 +951,12 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
                     <div id="taskLane" class="node-stack"></div>
                   </div>
                   <div class="lane">
-                    <div class="lane-title"><span>Worktree</span><span id="worktreeCount"></span></div>
-                    <div id="worktreeLane" class="node-stack"></div>
-                  </div>
-                  <div class="lane">
                     <div class="lane-title"><span>Thread</span><span id="threadCount"></span></div>
                     <div id="threadLane" class="node-stack"></div>
+                  </div>
+                  <div class="lane">
+                    <div class="lane-title"><span>Environment</span><span id="worktreeCount"></span></div>
+                    <div id="worktreeLane" class="node-stack"></div>
                   </div>
                 </div>
               </div>
@@ -1023,8 +1023,8 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
     };
 
     const graph = buildGraph(activeRows);
-    state.selectedKey = graph.tasks[0]?.key || graph.worktrees[0]?.key || graph.threads[0]?.key || "";
-    state.selectedType = graph.tasks[0] ? "task" : graph.worktrees[0] ? "worktree" : "thread";
+    state.selectedKey = graph.tasks[0]?.key || graph.threads[0]?.key || graph.worktrees[0]?.key || "";
+    state.selectedType = graph.tasks[0] ? "task" : graph.threads[0] ? "thread" : "worktree";
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -1051,12 +1051,8 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
       return row.taskId || row.branch || `task-${index + 1}`;
     }
 
-    function rowWorktreeKey(row, index) {
-      return row.worktreePath || `${rowTaskKey(row, index)}:missing-worktree:${index}`;
-    }
-
     function rowThreadKey(row, index) {
-      return `${rowTaskKey(row, index)}:${row.threadRole || "primary-execution"}`;
+      return row.threadId || `${rowTaskKey(row, index)}:${rowThreadLabel(row)}`;
     }
 
     function rowThreadLabel(row) {
@@ -1071,11 +1067,11 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
 
       sourceRows.forEach((row, index) => {
         const taskId = rowTaskKey(row, index);
-        const worktreeId = rowWorktreeKey(row, index);
         const threadId = rowThreadKey(row, index);
+        const worktreeId = row.worktreePath || "";
         const taskKey = nodeKey("task", taskId);
-        const worktreeKey = nodeKey("worktree", worktreeId);
         const threadKey = nodeKey("thread", threadId);
+        const worktreeKey = worktreeId ? nodeKey("environment", worktreeId) : "";
 
         if (!taskMap.has(taskKey)) {
           taskMap.set(taskKey, {
@@ -1089,17 +1085,17 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
         }
         taskMap.get(taskKey).rows.push(row);
 
-        if (!worktreeMap.has(worktreeKey)) {
+        if (worktreeKey && !worktreeMap.has(worktreeKey)) {
           worktreeMap.set(worktreeKey, {
-            type: "worktree",
+            type: "environment",
             key: worktreeKey,
-            label: row.worktreePath ? shortPath(row.worktreePath) : "missing worktree",
+            label: shortPath(row.worktreePath),
             health: row.health || "attention",
             status: row.dirty ? "dirty" : row.stale ? "stale" : row.health || "attention",
             rows: []
           });
         }
-        worktreeMap.get(worktreeKey).rows.push(row);
+        if (worktreeKey) worktreeMap.get(worktreeKey).rows.push(row);
 
         if (!threadMap.has(threadKey)) {
           threadMap.set(threadKey, {
@@ -1113,8 +1109,10 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
         }
         threadMap.get(threadKey).rows.push(row);
 
-        edgeMap.set(`${taskKey}->${worktreeKey}`, { from: taskKey, to: worktreeKey });
-        edgeMap.set(`${worktreeKey}->${threadKey}`, { from: worktreeKey, to: threadKey });
+        edgeMap.set(`${taskKey}->${threadKey}`, { from: taskKey, to: threadKey });
+        if (worktreeKey) {
+          edgeMap.set(`${threadKey}->${worktreeKey}`, { from: threadKey, to: worktreeKey });
+        }
       });
 
       return {
@@ -1129,7 +1127,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
     function shortPath(value) {
       const text = String(value || "");
       const parts = text.split(/[\\\\/]+/).filter(Boolean);
-      return parts.slice(-2).join("/") || text || "missing";
+      return parts.slice(-2).join("/") || text || "project-level / none";
     }
 
     function statusClass(status) {
@@ -1179,13 +1177,13 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
         <article class="summary">
           <div>
             <h2>${escapeHtml(payload.projectId || "project")}</h2>
-            <p>Project 是页面上下文。主关系固定为 <strong>Task -> Worktree -> Thread</strong>；risk / nextStep / validation / handoff 只在详情和矩阵中呈现。</p>
+            <p>Project 是页面上下文。主关系固定为 <strong>Task -> Thread -> Environment(optional)</strong>；risk / nextStep / validation / handoff 只在详情和矩阵中呈现。</p>
           </div>
           <span class="status-pill ${statusClass(projectHealth)}">${escapeHtml(projectHealth)}</span>
         </article>
         <article class="metric"><span>Tasks</span><b>${summaryCounts.visibleTasks || graph.tasks.length}</b><span>${summaryCounts.blocked || 0} blocked</span></article>
-        <article class="metric"><span>Worktrees</span><b>${summaryCounts.gitWorktrees || graph.worktrees.length}</b><span>${summaryCounts.worktreeAuditErrors || 0} audit errors</span></article>
-        <article class="metric"><span>Threads</span><b>${graph.threads.length}</b><span>role surfaces</span></article>
+        <article class="metric"><span>Environments</span><b>${summaryCounts.visibleEnvironments || graph.worktrees.length}</b><span>${summaryCounts.worktreeAuditErrors || 0} worktree audit errors</span></article>
+        <article class="metric"><span>Threads</span><b>${summaryCounts.visibleThreads || graph.threads.length}</b><span>recorded thread surfaces</span></article>
         <article class="metric"><span>Archive</span><b>${archiveSummary.archivedHidden || 0}</b><span>hidden by default</span></article>
       `;
     }
@@ -1241,9 +1239,9 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
         const branches = unique(node.rows.map((row) => row.branch));
         return branches.join(" / ") || `${node.rows.length} route rows`;
       }
-      if (node.type === "worktree") {
+      if (node.type === "environment") {
         const path = node.rows[0]?.worktreePath || "";
-        return path || "missing worktreePath";
+        return path || "project-level / none";
       }
       const tasks = unique(node.rows.map((row) => row.taskId));
       return `${node.label} / ${tasks.length} task route${tasks.length === 1 ? "" : "s"}`;
@@ -1251,15 +1249,15 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
 
     function chipsForNode(node) {
       if (node.type === "task") return `<span class="chip">taskId</span><span class="chip">branch</span>`;
-      if (node.type === "worktree") return `<span class="chip">worktreePath</span><span class="chip">dirty/stale</span>`;
+      if (node.type === "environment") return `<span class="chip">environment</span><span class="chip">dirty/stale</span>`;
       return `<span class="chip">thread role</span><span class="chip">routing</span>`;
     }
 
     function renderMap() {
       renderContextBand();
       renderLane(graph.tasks, "taskLane", "taskCount");
-      renderLane(graph.worktrees, "worktreeLane", "worktreeCount");
       renderLane(graph.threads, "threadLane", "threadCount");
+      renderLane(graph.worktrees, "worktreeLane", "worktreeCount");
       requestAnimationFrame(drawEdges);
       renderMobileRoutes();
     }
@@ -1294,15 +1292,15 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
       document.getElementById("mobileRoutes").innerHTML = graph.tasks.filter(matchesQuery).map((node) => {
         const selected = state.selectedKey === node.key;
         const dimmed = related.size > 1 && !related.has(node.key);
-        const worktrees = unique(node.rows.map((row) => row.worktreePath || "missing worktree")).map(shortPath).join(" / ");
+        const worktrees = unique(node.rows.map((row) => row.worktreePath || "project-level / none")).map(shortPath).join(" / ");
         const threads = unique(node.rows.map((row) => row.threadRole || "primary-execution")).join(" / ");
         const threadLabels = unique(node.rows.map(rowThreadLabel)).join(" / ");
         return `
           <button class="route-card ${selected ? "selected" : ""} ${dimmed ? "dimmed" : ""}" type="button" data-type="task" data-key="${escapeAttr(node.key)}">
             <span class="node-main"><b>${escapeHtml(node.label)}</b><span class="status-pill ${statusClass(healthForNode(node))}">${escapeHtml(healthForNode(node))}</span></span>
-            <span>worktreePath: ${escapeHtml(worktrees || "none")}</span>
-            <span>thread role: ${escapeHtml(threads || "none")}</span>
             <span>thread label: ${escapeHtml(threadLabels || "none")}</span>
+            <span>thread role: ${escapeHtml(threads || "none")}</span>
+            <span>environment: ${escapeHtml(worktrees || "project-level / none")}</span>
           </button>
         `;
       }).join("");
@@ -1315,19 +1313,19 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
       const worktrees = graph.worktrees;
       const threads = graph.threads;
       const rowsHtml = graph.tasks.map((task) => {
-        const worktreeCells = worktrees.map((worktree) => {
-          const hit = task.rows.some((row) => worktree.rows.includes(row));
-          return `<td class="${hit ? "hit" : ""}">${hit ? escapeHtml(worktree.label) : ""}</td>`;
-        }).join("");
         const threadCells = threads.map((thread) => {
           const hit = task.rows.some((row) => thread.rows.includes(row));
           return `<td class="${hit ? "hit" : ""}">${hit ? escapeHtml(thread.label) : ""}</td>`;
         }).join("");
+        const worktreeCells = worktrees.map((worktree) => {
+          const hit = task.rows.some((row) => worktree.rows.includes(row));
+          return `<td class="${hit ? "hit" : ""}">${hit ? escapeHtml(worktree.label) : ""}</td>`;
+        }).join("");
         return `
           <tr>
             <th>${escapeHtml(task.label)}<br><span class="status-pill ${statusClass(healthForNode(task))}">${escapeHtml(healthForNode(task))}</span></th>
-            ${worktreeCells}
             ${threadCells}
+            ${worktreeCells}
           </tr>
         `;
       }).join("");
@@ -1336,8 +1334,8 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
           <thead>
             <tr>
               <th>taskId</th>
-              ${worktrees.map((worktree) => `<th>worktreePath<br>${escapeHtml(worktree.label)}</th>`).join("")}
               ${threads.map((thread) => `<th>thread role<br>${escapeHtml(thread.label)}</th>`).join("")}
+              ${worktrees.map((worktree) => `<th>environment<br>${escapeHtml(worktree.label)}</th>`).join("")}
             </tr>
           </thead>
           <tbody>${rowsHtml}</tbody>
@@ -1390,7 +1388,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
           <b>${escapeHtml(item.title)}</b>
           <span>${escapeHtml(item.body)}。这是 dependency / routing evidence，不是 ownership 边。</span>
         </button>
-      `).join("") : `<span class="chip">无辅助 dependency / routing action。主图仍只表达 Task -> Worktree -> Thread。</span>`;
+      `).join("") : `<span class="chip">无辅助 dependency / routing action。主图仍只表达 Task -> Thread -> Environment(optional)。</span>`;
       document.querySelectorAll(".secondary-item").forEach((item) => {
         item.addEventListener("click", () => {
           const prompt = item.dataset.prompt || "";
@@ -1445,7 +1443,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
         return;
       }
       const branches = unique(node.rows.map((row) => row.branch));
-      const worktreePaths = unique(node.rows.map((row) => row.worktreePath));
+      const worktreePaths = unique(node.rows.map((row) => row.worktreePath || "project-level / none"));
       const threadRoles = unique(node.rows.map((row) => row.threadRole));
       const threadLabels = unique(node.rows.map((row) => row.threadLabel));
       const nextSteps = unique(node.rows.map((row) => row.nextStep));
@@ -1465,7 +1463,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
         ${evidenceBlock("Machine Fields", fieldRows([
           ["taskId", unique(node.rows.map((row) => row.taskId)).join(" / ")],
           ["branch", branches.join(" / ")],
-          ["worktreePath", worktreePaths.join(" / ")],
+          ["environment", worktreePaths.join(" / ")],
           ["thread role", threadRoles.join(" / ")],
           ["thread label", threadLabels.join(" / ")],
           ["dirty/stale", `dirty=${boolText(dirty)}, stale=${boolText(stale)}`],
@@ -1486,10 +1484,10 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
     function buildPrompt(node) {
       const first = node.rows[0] || {};
       if (node.type === "task") {
-        return `Resume task ${first.taskId || node.label}. Check branches ${unique(node.rows.map((row) => row.branch)).join(", ") || "unknown"}, worktrees ${unique(node.rows.map((row) => row.worktreePath)).join(", ") || "none"}, and canonical thread roles ${unique(node.rows.map((row) => row.threadRole)).join(", ") || "none"}. Preserve handoff, validation, and safetyRules before editing.`;
+        return `Resume task ${first.taskId || node.label}. Check branches ${unique(node.rows.map((row) => row.branch)).join(", ") || "unknown"}, canonical thread roles ${unique(node.rows.map((row) => row.threadRole)).join(", ") || "none"}, and environments ${unique(node.rows.map((row) => row.worktreePath || "project-level / none")).join(", ")}. Preserve handoff, validation, and safetyRules before editing.`;
       }
-      if (node.type === "worktree") {
-        return `Audit worktree ${first.worktreePath || node.label}. Check dirty=${Boolean(first.dirty)}, stale=${Boolean(first.stale)}, handoff, validation, safetyRules, nextStep, and blocker before resuming related tasks.`;
+      if (node.type === "environment") {
+        return `Audit environment ${first.worktreePath || node.label}. Check dirty=${Boolean(first.dirty)}, stale=${Boolean(first.stale)}, handoff, validation, safetyRules, nextStep, and blocker before resuming related tasks.`;
       }
       return `Resume canonical thread role ${first.threadRole || "primary-execution"}${first.threadLabel ? ` (${first.threadLabel})` : ""} for task ${first.taskId || "unknown"}. Report taskId, status, handoffPath, nextStep, blocker, validation, and risks back to th-project-hub.`;
     }
@@ -1497,7 +1495,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
     function renderActions() {
       const node = selectedNode();
       const prompt = node ? buildPrompt(node) : "Use audit-project for Agent Workflow Hub.";
-      const auditPrompt = "Use $agent-workflow-hub to run visualize-project / audit-project for this Project Hub. Keep Project as context; main graph remains Task -> Worktree -> Thread; dependencies and th-project-hub stay secondary.";
+      const auditPrompt = "Use $agent-workflow-hub to run visualize-project / audit-project for this Project Hub. Keep Project as context; main graph remains Task -> Thread -> Environment(optional); dependencies and th-project-hub stay secondary.";
       document.getElementById("actionBody").innerHTML = `
         <div class="audit-entry">
           <span class="status-pill status-attention">audit / routing</span>

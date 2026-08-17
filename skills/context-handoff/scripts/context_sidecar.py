@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shlex
 import subprocess
 import sys
@@ -579,6 +580,7 @@ def compact_task(task: dict[str, Any]) -> dict[str, Any]:
         "threadRole": task.get("threadRole", ""),
         "threadLabel": task.get("threadLabel", ""),
         "threadPurpose": task.get("threadPurpose", ""),
+        "threads": compact_thread_entries(ensure_task_threads(task, mutate=False)),
         "routingStatus": task.get("routingStatus", ""),
         "routingConfidence": task.get("routingConfidence", None),
         "routingNeedsReview": bool(task.get("routingNeedsReview", False)),
@@ -619,6 +621,191 @@ def unique_nonempty(values: list[str], limit: int | None = None) -> list[str]:
         if limit is not None and len(result) >= limit:
             break
     return result
+
+
+def make_thread_id() -> str:
+    return f"thr_{secrets.token_hex(5)}"
+
+
+def legacy_thread_id_for_task(task: dict[str, Any]) -> str:
+    seed = "|".join(
+        [
+            str(task.get("taskId") or ""),
+            str(task.get("threadRole") or ""),
+            str(task.get("threadLabel") or ""),
+            str(task.get("worktreePath") or ""),
+        ]
+    )
+    return "thr_" + hashlib.sha1(seed.encode("utf-8", errors="replace")).hexdigest()[:10]
+
+
+def thread_display_label(thread: dict[str, Any]) -> str:
+    return str(
+        thread.get("threadDisplayLabel")
+        or thread.get("threadLabel")
+        or thread.get("threadRole")
+        or "primary-execution"
+    )
+
+
+def normalize_thread_entry(
+    thread: dict[str, Any],
+    task: dict[str, Any],
+    *,
+    handoff_available: bool | None = None,
+    handoff_path: str = "",
+) -> dict[str, Any]:
+    role = normalize_thread_role(str(thread.get("threadRole") or "")) or str(thread.get("threadRole") or "") or "primary-execution"
+    worktree_path = str(thread.get("worktreePath") or "")
+    return {
+        "threadId": str(thread.get("threadId") or make_thread_id()),
+        "codexThreadId": str(thread.get("codexThreadId") or ""),
+        "threadRole": role,
+        "threadLabel": short_text(str(thread.get("threadLabel") or ""), max_len=120),
+        "threadDisplayLabel": short_text(
+            str(thread.get("threadDisplayLabel") or thread.get("threadLabel") or role),
+            max_len=120,
+        ),
+        "threadPurpose": short_text(str(thread.get("threadPurpose") or ""), max_len=320),
+        "worktreePath": worktree_path,
+        "environmentType": str(thread.get("environmentType") or ("worktree" if worktree_path else "project-level")),
+        "nextStep": short_text(str(thread.get("nextStep") or task.get("nextStep") or ""), max_len=240),
+        "lastSummary": short_text(str(thread.get("lastSummary") or thread.get("threadSummary") or task.get("lastThreadSummary") or ""), max_len=320),
+        "continuePhrase": short_text(str(thread.get("continuePhrase") or task.get("continuePhrase") or ""), max_len=96),
+        "handoffAvailable": bool(task.get("_handoffAvailable", False) if handoff_available is None else handoff_available),
+        "handoffPath": handoff_path or str(thread.get("handoffPath") or task.get("_handoffPath") or ""),
+        "compactReceipt": short_text(str(thread.get("compactReceipt") or task.get("compactReceipt") or ""), max_len=500),
+        "updatedAt": str(thread.get("updatedAt") or task.get("updatedAt") or now_iso()),
+    }
+
+
+def legacy_thread_from_task(
+    task: dict[str, Any],
+    *,
+    handoff_available: bool | None = None,
+    handoff_path: str = "",
+) -> dict[str, Any]:
+    role = normalize_thread_role(str(task.get("threadRole") or "")) or str(task.get("threadRole") or "") or "primary-execution"
+    worktree_path = str(task.get("worktreePath") or "")
+    return normalize_thread_entry(
+        {
+            "threadId": str(task.get("threadId") or legacy_thread_id_for_task(task)),
+            "threadRole": role,
+            "threadLabel": task.get("threadLabel", ""),
+            "threadDisplayLabel": task.get("threadDisplayLabel", "") or task.get("threadLabel", "") or role,
+            "threadPurpose": task.get("threadPurpose", ""),
+            "worktreePath": worktree_path,
+            "environmentType": "worktree" if worktree_path else "project-level",
+            "nextStep": task.get("nextStep", ""),
+            "lastSummary": task.get("lastThreadSummary", ""),
+            "continuePhrase": task.get("continuePhrase", ""),
+            "compactReceipt": task.get("compactReceipt", ""),
+            "updatedAt": task.get("updatedAt", ""),
+        },
+        task,
+        handoff_available=handoff_available,
+        handoff_path=handoff_path,
+    )
+
+
+def ensure_task_threads(
+    task: dict[str, Any],
+    *,
+    mutate: bool = False,
+    handoff_available: bool | None = None,
+    handoff_path: str = "",
+) -> list[dict[str, Any]]:
+    raw_threads = task.get("threads")
+    threads: list[dict[str, Any]] = []
+    if isinstance(raw_threads, list):
+        for item in raw_threads:
+            if isinstance(item, dict):
+                threads.append(normalize_thread_entry(item, task, handoff_available=handoff_available, handoff_path=handoff_path))
+    if not threads:
+        threads = [legacy_thread_from_task(task, handoff_available=handoff_available, handoff_path=handoff_path)]
+    if mutate:
+        task["threads"] = threads
+    return threads
+
+
+def compact_thread_entries(threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compact: list[dict[str, Any]] = []
+    for thread in threads:
+        compact.append(
+            {
+                "threadId": thread.get("threadId", ""),
+                "threadRole": thread.get("threadRole", ""),
+                "threadLabel": thread.get("threadLabel", ""),
+                "threadDisplayLabel": thread_display_label(thread),
+                "threadPurpose": thread.get("threadPurpose", ""),
+                "worktreePath": thread.get("worktreePath", ""),
+                "environmentType": thread.get("environmentType", ""),
+                "nextStep": thread.get("nextStep", ""),
+                "lastSummary": thread.get("lastSummary", ""),
+                "handoffAvailable": bool(thread.get("handoffAvailable", False)),
+                "updatedAt": thread.get("updatedAt", ""),
+            }
+        )
+    return compact
+
+
+def upsert_current_thread(
+    task: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    handoff_available: bool | None = None,
+    handoff_path: str = "",
+    compact_receipt: str = "",
+    continue_phrase: str = "",
+) -> dict[str, Any]:
+    threads = ensure_task_threads(task, mutate=True, handoff_available=handoff_available, handoff_path=handoff_path)
+    requested_id = str(getattr(args, "thread_id", "") or "").strip()
+    role = normalize_thread_role(getattr(args, "thread_role", None)) or str(task.get("threadRole") or "primary-execution")
+    label_value = getattr(args, "thread_label", None) if getattr(args, "thread_label", None) is not None else task.get("threadLabel", "")
+    purpose_value = getattr(args, "thread_purpose", None) if getattr(args, "thread_purpose", None) is not None else task.get("threadPurpose", "")
+    label = short_text(str(label_value or ""), max_len=120)
+    purpose = short_text(str(purpose_value or ""), max_len=320)
+    worktree_path = "" if getattr(args, "project_level_orientation", False) else str(task.get("worktreePath") or "")
+
+    selected: dict[str, Any] | None = None
+    if requested_id:
+        selected = next((thread for thread in threads if str(thread.get("threadId") or "") == requested_id), None)
+    if selected is None:
+        matches = [
+            thread
+            for thread in threads
+            if str(thread.get("threadRole") or "") == role
+            and str(thread.get("threadLabel") or "") == label
+            and str(thread.get("worktreePath") or "") == worktree_path
+        ]
+        if len(matches) == 1:
+            selected = matches[0]
+    if selected is None:
+        selected = {"threadId": requested_id or make_thread_id()}
+        threads.append(selected)
+
+    selected.update(
+        {
+            "threadRole": role,
+            "threadLabel": label,
+            "threadDisplayLabel": label or role,
+            "threadPurpose": purpose,
+            "worktreePath": worktree_path,
+            "environmentType": "worktree" if worktree_path else "project-level",
+            "nextStep": short_text(str(task.get("nextStep") or ""), max_len=240),
+            "lastSummary": short_text(str(getattr(args, "thread_summary", None) or task.get("lastThreadSummary") or ""), max_len=320),
+            "continuePhrase": short_text(continue_phrase or str(task.get("continuePhrase") or ""), max_len=96),
+            "handoffAvailable": bool(task.get("_handoffAvailable", False) if handoff_available is None else handoff_available),
+            "handoffPath": handoff_path or str(task.get("_handoffPath") or selected.get("handoffPath") or ""),
+            "compactReceipt": short_text(compact_receipt or str(task.get("compactReceipt") or ""), max_len=500),
+            "updatedAt": now_iso(),
+        }
+    )
+    task["threads"] = [
+        normalize_thread_entry(thread, task, handoff_available=thread.get("handoffAvailable", False), handoff_path=str(thread.get("handoffPath") or ""))
+        for thread in threads
+    ]
+    return normalize_thread_entry(selected, task, handoff_available=selected.get("handoffAvailable", False), handoff_path=str(selected.get("handoffPath") or ""))
 
 
 def bool_label(value: bool) -> str:
@@ -1743,6 +1930,7 @@ class SidecarManager:
             "threadRole": "",
             "threadLabel": "",
             "threadPurpose": "",
+            "threads": [],
             "routingStatus": "confirmed" if self.git.is_git_worktree else "provisional",
             "routingConfidence": 1.0 if self.git.is_git_worktree else 0.3,
             "routingEvidence": ["created from current Git worktree"] if self.git.is_git_worktree else ["created from non-Git path"],
@@ -1907,6 +2095,7 @@ class SidecarManager:
             task.setdefault("upstream", "")
             task.setdefault("dirtyFiles", [])
             task.setdefault("dirtyFingerprint", "")
+        upsert_current_thread(task, args)
         task["updatedAt"] = now_iso()
         task.pop("_isNewTask", None)
         return task
@@ -2086,6 +2275,21 @@ def handoff_section(markdown: str, section: str) -> tuple[str, str]:
     return "", ""
 
 
+def select_handoff_thread(task: dict[str, Any] | None, args: argparse.Namespace) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str]:
+    if not task:
+        return None, [], ""
+    threads = ensure_task_threads(task, mutate=False)
+    requested_id = str(getattr(args, "thread_id", "") or "").strip()
+    requested_role = normalize_thread_role(getattr(args, "thread_role", None)) if getattr(args, "thread_role", None) else ""
+    if requested_id:
+        matches = [thread for thread in threads if str(thread.get("threadId") or "") == requested_id]
+        return (matches[0] if len(matches) == 1 else None), matches, "thread-id"
+    if requested_role:
+        matches = [thread for thread in threads if str(thread.get("threadRole") or "") == requested_role]
+        return (matches[0] if len(matches) == 1 else None), matches, "thread-role"
+    return (threads[0] if len(threads) == 1 else None), threads, "none"
+
+
 def task_for_load_handoff(manager: SidecarManager, payload: dict[str, Any], args: argparse.Namespace, language: str) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
     if getattr(args, "task_id", None):
         task = task_by_id(manager, payload, slugify(args.task_id))
@@ -2110,6 +2314,8 @@ def build_load_handoff_output(
     resolved_by: str,
     resolution: dict[str, Any],
     language: str,
+    selected_thread: dict[str, Any] | None = None,
+    thread_candidates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     task_id = str((task or {}).get("taskId") or resolution.get("taskId") or "")
     handoff_path = manager.handoff_path_for(task) if task else manager.handoffs_dir / f"{task_id}.md"
@@ -2151,8 +2357,11 @@ def build_load_handoff_output(
     return {
         "projectId": manager.project_id,
         "taskId": task_id,
-        "threadRole": (task or {}).get("threadRole", ""),
-        "threadLabel": (task or {}).get("threadLabel", ""),
+        "threadId": (selected_thread or {}).get("threadId", ""),
+        "threadRole": (selected_thread or {}).get("threadRole", (task or {}).get("threadRole", "")),
+        "threadLabel": (selected_thread or {}).get("threadLabel", (task or {}).get("threadLabel", "")),
+        "selectedThread": selected_thread or {},
+        "threadCandidates": compact_thread_entries(thread_candidates or ensure_task_threads(task, mutate=False) if task else []),
         "continuePhrase": (task or {}).get("continuePhrase", ""),
         "mode": mode,
         "section": section if mode == "section" else "",
@@ -3091,8 +3300,11 @@ def base_visual_row_from_task(task: dict[str, Any], *, archived: bool = False) -
         "taskId": task.get("taskId", ""),
         "branch": task.get("branch", ""),
         "worktreePath": task.get("worktreePath", ""),
+        "environmentType": "worktree" if task.get("worktreePath") else "project-level",
+        "threadId": "",
         "threadRole": task.get("threadRole", "") or "primary-execution",
         "threadLabel": task.get("threadLabel", ""),
+        "threadDisplayLabel": task.get("threadDisplayLabel", "") or task.get("threadLabel", "") or task.get("threadRole", "") or "primary-execution",
         "threadPurpose": task.get("threadPurpose", ""),
         "continuePhrase": task.get("continuePhrase", ""),
         "compactReceipt": task.get("compactReceipt", ""),
@@ -3124,6 +3336,43 @@ def base_visual_row_from_task(task: dict[str, Any], *, archived: bool = False) -
     }
     row["health"] = visual_health_for_row(row)
     return row
+
+
+def visual_rows_for_task_threads(base_row: dict[str, Any], task: dict[str, Any]) -> list[dict[str, Any]]:
+    threads = ensure_task_threads(
+        task,
+        mutate=False,
+        handoff_available=bool(base_row.get("handoffAvailable")),
+        handoff_path=str(base_row.get("handoffPath") or task.get("_handoffPath") or ""),
+    )
+    rows: list[dict[str, Any]] = []
+    for thread in threads:
+        row = dict(base_row)
+        worktree_path = str(thread.get("worktreePath") or "")
+        row.update(
+            {
+                "threadId": thread.get("threadId", ""),
+                "threadRole": thread.get("threadRole", "") or "primary-execution",
+                "threadLabel": thread.get("threadLabel", ""),
+                "threadDisplayLabel": thread_display_label(thread),
+                "threadPurpose": thread.get("threadPurpose", ""),
+                "worktreePath": worktree_path,
+                "environmentType": thread.get("environmentType", "") or ("worktree" if worktree_path else "project-level"),
+                "nextStep": thread.get("nextStep", "") or row.get("nextStep", ""),
+                "continuePhrase": thread.get("continuePhrase", "") or row.get("continuePhrase", ""),
+                "compactReceipt": thread.get("compactReceipt", "") or row.get("compactReceipt", ""),
+                "handoffAvailable": bool(thread.get("handoffAvailable", row.get("handoffAvailable"))),
+                "handoffPath": thread.get("handoffPath", "") or row.get("handoffPath", ""),
+            }
+        )
+        if not worktree_path:
+            row["dirty"] = False
+            row["dirtyFiles"] = []
+            row["stale"] = False
+            row["staleReasons"] = []
+        row["health"] = visual_health_for_row(row)
+        rows.append(row)
+    return rows
 
 
 def build_visual_project_payload(manager: SidecarManager, include_archive: bool, language: str) -> dict[str, Any]:
@@ -3163,7 +3412,10 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
             row["threadRole"] = thread_role_for_row(row)
             row["threadDisplayLabel"] = thread_display_label_for_row(row)
             row["handoffPath"] = audit.get("handoffPath", "")
-            rows.append(row)
+            if task:
+                rows.extend(visual_rows_for_task_threads(row, task))
+            else:
+                rows.append(row)
         except Exception as exc:
             errors.append({"worktreePath": path, "error": short_text(str(exc), max_len=500)})
 
@@ -3179,7 +3431,8 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
         raw_path = str(task.get("worktreePath") or "")
         resolved = str(Path(raw_path).resolve()) if raw_path else ""
         has_worktree = bool(raw_path and resolved in worktree_paths)
-        if not has_worktree:
+        missing_recorded_worktree = bool(raw_path and not has_worktree)
+        if missing_recorded_worktree:
             active_without_worktree.append(
                 {
                     "taskId": task.get("taskId", ""),
@@ -3196,11 +3449,11 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
         if has_worktree:
             row["recommendedAction"] = ""
             row["recommendedActionType"] = ""
-        else:
+        elif missing_recorded_worktree:
             row["recommendedAction"] = "active task points to a missing worktree"
             row["recommendedActionType"] = "cleanup-or-recover-missing-worktree"
             row["health"] = "blocked" if row.get("taskStatus") == "blocked" or not row.get("handoffAvailable") else "attention"
-        rows.append(row)
+        rows.extend(visual_rows_for_task_threads(row, task_copy))
 
     recommended_actions, _, cleanup_prompts = build_hub_action_prompts(manager, rows, active_without_worktree, language, dogfood_candidates)
     actions_by_key: dict[str, dict[str, Any]] = {}
@@ -3230,6 +3483,8 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
                 "taskId": row.get("taskId", "") or row.get("branch", "") or Path(str(row.get("worktreePath") or "")).name or "unknown",
                 "branch": row.get("branch", ""),
                 "worktreePath": row.get("worktreePath", ""),
+                "environmentType": row.get("environmentType", "") or ("worktree" if row.get("worktreePath") else "project-level"),
+                "threadId": row.get("threadId", ""),
                 "threadRole": row.get("threadRole", "primary-execution"),
                 "threadLabel": row.get("threadLabel", ""),
                 "threadDisplayLabel": row.get("threadDisplayLabel", "") or row.get("threadLabel", "") or row.get("threadRole", ""),
@@ -3266,49 +3521,40 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
                 archived_rows.append(base_visual_row_from_task(task, archived=True))
         task_rows.extend(archived_rows)
 
-    project_node = {
-        "id": visual_node_id("project", manager.project_id),
-        "type": "project",
-        "label": manager.project_id,
-        "health": "healthy",
-        "details": {
-            "sidecarRoot": str(manager.sidecar_root),
-            "canonicalRepoRoot": str(manager.git.repo_root),
-            "baseBranch": manager.git.base_branch,
-            "threadRole": "hub",
-        },
-    }
-    nodes: list[dict[str, Any]] = [project_node]
+    nodes: list[dict[str, Any]] = []
     edges: list[dict[str, str]] = []
-    seen_nodes = {project_node["id"]}
+    seen_nodes: set[str] = set()
     for row in task_rows:
         task_key = row.get("taskId") or row.get("branch") or row.get("worktreePath") or "unknown"
         task_id = visual_node_id("task", str(task_key))
         parent_task_key = str(row.get("parentTaskId") or "").strip()
         parent_task_id = visual_node_id("task", parent_task_key) if parent_task_key else ""
-        worktree_path = str(row.get("worktreePath") or "")
-        worktree_label = Path(worktree_path).name if worktree_path else "missing worktree"
-        worktree_id = visual_node_id("worktree", worktree_path or str(task_key))
+        environment_path = str(row.get("worktreePath") or "")
+        environment_label = Path(environment_path).name if environment_path else ""
+        environment_id = visual_node_id("environment", environment_path) if environment_path else ""
         role = str(row.get("threadRole") or "primary-execution")
         role_label = str(row.get("threadDisplayLabel") or row.get("threadLabel") or role)
-        role_id = visual_node_id("role", f"{task_key}:{role}")
+        role_id = visual_node_id("thread", str(row.get("threadId") or f"{task_key}:{role_label}"))
         node_specs = [
             {"id": task_id, "type": "task", "label": short_text(str(task_key), max_len=40), "health": row.get("health", "attention"), "details": row},
             {
-                "id": worktree_id,
-                "type": "worktree",
-                "label": short_text(worktree_label, max_len=40),
-                "health": row.get("health", "attention"),
-                "details": {"worktreePath": worktree_path, "branch": row.get("branch", ""), "dirty": row.get("dirty", False), "stale": row.get("stale", False)},
-            },
-            {
                 "id": role_id,
-                "type": "threadRole",
+                "type": "thread",
                 "label": role_label,
                 "health": row.get("health", "attention"),
-                "details": {"taskId": task_key, "threadRole": role, "threadLabel": row.get("threadLabel", ""), "displayLabel": role_label},
+                "details": {"taskId": task_key, "threadId": row.get("threadId", ""), "threadRole": role, "threadLabel": row.get("threadLabel", ""), "displayLabel": role_label},
             },
         ]
+        if environment_path:
+            node_specs.append(
+                {
+                    "id": environment_id,
+                    "type": "environment",
+                    "label": short_text(environment_label, max_len=40),
+                    "health": row.get("health", "attention"),
+                    "details": {"environmentType": row.get("environmentType", "worktree"), "worktreePath": environment_path, "branch": row.get("branch", ""), "dirty": row.get("dirty", False), "stale": row.get("stale", False)},
+                }
+            )
         if parent_task_key:
             parent_details = {"taskId": parent_task_key, "childrenInView": [task_key], "type": "parentTask"}
             node_specs.insert(
@@ -3326,16 +3572,10 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
                 nodes.append(spec)
                 seen_nodes.add(spec["id"])
         if parent_task_key:
-            edges.append({"from": project_node["id"], "to": parent_task_id, "label": "has task"})
             edges.append({"from": parent_task_id, "to": task_id, "label": "child task"})
-        else:
-            edges.append({"from": project_node["id"], "to": task_id, "label": "has task"})
-        edges.extend(
-            [
-                {"from": task_id, "to": worktree_id, "label": "uses"},
-                {"from": worktree_id, "to": role_id, "label": "owned by"},
-            ]
-        )
+        edges.append({"from": task_id, "to": role_id, "label": "owned by"})
+        if environment_path:
+            edges.append({"from": role_id, "to": environment_id, "label": "uses"})
 
     needs_attention = []
     for row in task_rows:
@@ -3359,12 +3599,18 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
                 "health": row.get("health", ""),
                 "reason": reason,
                 "recommendedActionType": row.get("recommendedActionType", ""),
+                "threadId": row.get("threadId", ""),
+                "threadRole": row.get("threadRole", ""),
+                "threadLabel": row.get("threadLabel", ""),
+                "environmentType": row.get("environmentType", ""),
                 "worktreePath": row.get("worktreePath", ""),
             }
         )
 
     summary_counts = {
         "visibleTasks": len(task_rows),
+        "visibleThreads": len({str(row.get("threadId") or f"{row.get('taskId')}:{row.get('threadDisplayLabel')}") for row in task_rows}),
+        "visibleEnvironments": len({str(row.get("worktreePath") or "") for row in task_rows if row.get("worktreePath")}),
         "activeTasks": sum(1 for row in task_rows if row.get("taskStatus") == "active"),
         "pausedTasks": sum(1 for row in task_rows if row.get("taskStatus") == "paused"),
         "blockedTasks": sum(1 for row in task_rows if row.get("taskStatus") == "blocked"),
@@ -3399,6 +3645,14 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
         "sidecarRoot": str(manager.sidecar_root),
         "canonicalRepoRoot": str(manager.git.repo_root),
         "baseBranch": manager.git.base_branch,
+        "projectContext": {
+            "id": visual_node_id("project", manager.project_id),
+            "label": manager.project_id,
+            "sidecarRoot": str(manager.sidecar_root),
+            "canonicalRepoRoot": str(manager.git.repo_root),
+            "baseBranch": manager.git.base_branch,
+            "threadRole": "hub",
+        },
         "summaryCounts": summary_counts,
         "nodes": nodes,
         "edges": edges,
@@ -3426,6 +3680,7 @@ def build_visual_project_markdown(report: dict[str, Any]) -> str:
         f"- {visual_text(language, 'generated_at')}: {report['generatedAt']}",
         f"- {visual_text(language, 'sidecar')}: {report['sidecarRoot']}",
         f"- {visual_text(language, 'canonical_repo')}: {report['canonicalRepoRoot']}",
+        "- Project is context; the main graph is Task -> Thread -> Environment(optional).",
         "",
         f"## {visual_text(language, 'project_graph')}",
         "",
@@ -3458,7 +3713,7 @@ def build_visual_project_markdown(report: dict[str, Any]) -> str:
             "",
             f"## {visual_text(language, 'details')}",
             "",
-            f"| {visual_text(language, 'task')} | {visual_text(language, 'parent_task')} | {visual_text(language, 'phase')} | {visual_text(language, 'worktree')} | {visual_text(language, 'thread_role')} | {visual_text(language, 'thread_label')} | Continue | {visual_text(language, 'routing')} | {visual_text(language, 'health')} | {visual_text(language, 'handoff')} | {visual_text(language, 'validation')} | {visual_text(language, 'safety')} | {visual_text(language, 'dirty_stale')} | {visual_text(language, 'action')} |",
+            f"| {visual_text(language, 'task')} | {visual_text(language, 'parent_task')} | {visual_text(language, 'phase')} | Environment | {visual_text(language, 'thread_role')} | {visual_text(language, 'thread_label')} | Continue | {visual_text(language, 'routing')} | {visual_text(language, 'health')} | {visual_text(language, 'handoff')} | {visual_text(language, 'validation')} | {visual_text(language, 'safety')} | {visual_text(language, 'dirty_stale')} | {visual_text(language, 'action')} |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
     )
@@ -3471,7 +3726,7 @@ def build_visual_project_markdown(report: dict[str, Any]) -> str:
                     markdown_cell(row.get("taskId") or row.get("branch") or "unknown"),
                     markdown_cell(row.get("parentTaskId", "")),
                     markdown_cell(row.get("phase", "")),
-                    markdown_cell(Path(str(row.get("worktreePath") or "")).name or visual_text(language, "missing")),
+                    markdown_cell(Path(str(row.get("worktreePath") or "")).name or "project-level / none"),
                     markdown_cell(row.get("threadRole", "")),
                     markdown_cell(row.get("threadLabel", "")),
                     markdown_cell(row.get("continuePhrase", "")),
@@ -4394,6 +4649,7 @@ def orient_attach_args(args: argparse.Namespace, role: str, label: str, purpose:
         status="active",
         parent_task_id=getattr(args, "parent_task_id", None),
         phase=getattr(args, "phase", None),
+        thread_id=getattr(args, "thread_id", None),
         thread_role=role,
         thread_label=label,
         thread_purpose=purpose,
@@ -4631,6 +4887,7 @@ def cmd_start_feature(args: argparse.Namespace) -> int:
     conflicts = [] if explicit_task_id else [item.get("taskId", "<unknown>") for item in candidates[1:]]
     sidecar_hit = task is not None
     task = manager.upsert_task(payload, task, args, route=route)
+    current_thread = upsert_current_thread(task, args)
     manager.save_active_tasks(payload)
     snapshot = manager.task_snapshot(task, conflicts)
     manager.log_event(
@@ -4730,6 +4987,8 @@ def cmd_attach_thread(args: argparse.Namespace) -> int:
                 "threadRole": task.get("threadRole", ""),
                 "threadLabel": task.get("threadLabel", ""),
                 "threadPurpose": task.get("threadPurpose", ""),
+                "threadId": current_thread.get("threadId", ""),
+                "threads": compact_thread_entries(ensure_task_threads(task, mutate=False)),
                 "continuePhrase": task.get("continuePhrase", ""),
                 "routingStatus": task.get("routingStatus", ""),
                 "routingConfidence": task.get("routingConfidence", None),
@@ -4895,6 +5154,7 @@ def cmd_orient_thread(args: argparse.Namespace) -> int:
             attach_args,
             route=route,
         )
+        current_thread = upsert_current_thread(task, attach_args)
         if is_project_level_scope(orientation_scope):
             task["orientationScope"] = orientation_scope
             task["storageAnchor"] = str(project_resolution.get("storageAnchor") or manager.git.worktree_path)
@@ -4913,13 +5173,16 @@ def cmd_orient_thread(args: argparse.Namespace) -> int:
                     ],
                     limit=30,
                 )
+            current_thread = upsert_current_thread(task, attach_args)
         manager.save_active_tasks(payload)
         sidecar_mutated = True
         attach_result = {
             "taskId": task.get("taskId", ""),
+            "threadId": current_thread.get("threadId", ""),
             "threadRole": task.get("threadRole", ""),
             "threadLabel": task.get("threadLabel", ""),
             "threadPurpose": task.get("threadPurpose", ""),
+            "threads": compact_thread_entries(ensure_task_threads(task, mutate=False)),
             "routingStatus": task.get("routingStatus", ""),
             "routingConfidence": task.get("routingConfidence", None),
             "routingNeedsReview": bool(task.get("routingNeedsReview", False)),
@@ -6073,6 +6336,14 @@ def cmd_handoff(args: argparse.Namespace) -> int:
     task["continuePhrase"] = continue_phrase
     task["compactReceipt"] = compact_receipt
     task["receiptUpdatedAt"] = now_iso()
+    current_thread = upsert_current_thread(
+        task,
+        args,
+        handoff_available=True,
+        handoff_path=str(handoff_path),
+        compact_receipt=compact_receipt,
+        continue_phrase=continue_phrase,
+    )
     handoff_content = build_handoff_markdown(task, args, manager, language)
     with file_lock(handoff_path):
         atomic_write_text(handoff_path, handoff_content)
@@ -6104,6 +6375,7 @@ def cmd_handoff(args: argparse.Namespace) -> int:
                 "machineReceipt": {
                     "projectId": manager.project_id,
                     "taskId": task["taskId"],
+                    "threadId": current_thread.get("threadId", ""),
                     "threadRole": task.get("threadRole", ""),
                     "threadLabel": task.get("threadLabel", ""),
                     "handoffPath": str(handoff_path),
@@ -6170,6 +6442,50 @@ def cmd_load_handoff(args: argparse.Namespace) -> int:
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0
 
+    selected_thread, thread_candidates, thread_resolved_by = select_handoff_thread(task, args)
+    explicit_thread_selector = thread_resolved_by in {"thread-id", "thread-role"}
+    if explicit_thread_selector and task and len(thread_candidates) != 1:
+        output = {
+            "projectId": manager.project_id,
+            "taskId": task.get("taskId", ""),
+            "mode": mode,
+            "section": section if mode == "section" else "",
+            "reasonCode": reason,
+            "reasonNotePresent": bool(reason_note.strip()),
+            "resolvedBy": resolved_by,
+            "resolution": resolution,
+            "threadResolvedBy": thread_resolved_by,
+            "selectedThread": {},
+            "threadCandidates": compact_thread_entries(thread_candidates),
+            "handoffAvailable": manager.handoff_path_for(task).exists(),
+            "contentReturned": False,
+            "contentChars": 0,
+            "content": "",
+            "repoMutated": False,
+            "sidecarMutated": False,
+            "disambiguationQuestion": "Multiple or zero matching threads; rerun with --thread-id from threadCandidates.",
+        }
+        manager.log_event(
+            "load-handoff",
+            started_at=started_at,
+            task_id=task.get("taskId", ""),
+            sidecar_hit=True,
+            handoff_available=output.get("handoffAvailable"),
+            scan_scope="sidecar-handoff-load",
+            threadRole=getattr(args, "thread_role", "") or "",
+            loadMode=mode,
+            section=section if mode == "section" else "",
+            reasonCode=reason,
+            reasonNotePresent=bool(reason_note.strip()),
+            contentReturned=False,
+            contentChars=0,
+            resolvedBy=resolved_by,
+            threadResolvedBy=thread_resolved_by,
+            candidateCount=len(thread_candidates),
+        )
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+        return 0
+
     output = build_load_handoff_output(
         manager,
         task,
@@ -6180,6 +6496,8 @@ def cmd_load_handoff(args: argparse.Namespace) -> int:
         resolved_by=resolved_by,
         resolution=resolution,
         language=language,
+        selected_thread=selected_thread,
+        thread_candidates=thread_candidates,
     )
     manager.log_event(
         "load-handoff",
@@ -6353,17 +6671,24 @@ def cmd_visualize_project(args: argparse.Namespace) -> int:
     started_at = time.perf_counter()
     manager = make_manager(args)
     language = resolve_language(args, manager)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    report_base = f"visual-{timestamp}-{manager.project_id}"
+    report_base = "project-hub-dashboard"
     json_path = manager.reports_dir / f"{report_base}.json"
     markdown_path = manager.reports_dir / f"{report_base}.md"
     html_path = manager.reports_dir / f"{report_base}.html"
+    for old_report in manager.reports_dir.glob(f"visual-*-{manager.project_id}.*"):
+        if old_report.suffix.lower() in {".json", ".md", ".html"}:
+            try:
+                old_report.unlink()
+            except OSError:
+                pass
     report = build_visual_project_payload(manager, bool(args.include_archive), language)
     report["reportPaths"] = {
         "markdown": str(markdown_path),
         "json": str(json_path),
         "html": str(html_path),
     }
+    report["dashboardPath"] = str(html_path)
+    report["dashboardUrl"] = html_path.resolve().as_uri()
     with file_lock(json_path):
         atomic_write_text(json_path, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     with file_lock(markdown_path):
@@ -6386,6 +6711,8 @@ def cmd_visualize_project(args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "projectId": manager.project_id,
+                "dashboardPath": report["dashboardPath"],
+                "dashboardUrl": report["dashboardUrl"],
                 "reportPaths": report["reportPaths"],
                 "summaryCounts": report.get("summaryCounts", {}),
                 "needsAttentionCount": len(report.get("needsAttention", [])),
@@ -6580,6 +6907,7 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--status", choices=sorted(VALID_STATUSES))
         subparser.add_argument("--parent-task-id")
         subparser.add_argument("--phase")
+        subparser.add_argument("--thread-id")
         subparser.add_argument("--thread-role")
         subparser.add_argument("--thread-label")
         subparser.add_argument("--thread-purpose")
@@ -6656,6 +6984,7 @@ def build_parser() -> argparse.ArgumentParser:
     orient_parser.add_argument("--task-id", help="Optional task id hint to attach or route to.")
     orient_parser.add_argument("--parent-task-id", help="Optional parent task id for attach mode.")
     orient_parser.add_argument("--phase", help="Optional task phase for attach mode.")
+    orient_parser.add_argument("--thread-id", help="Optional internal thread id to update in attach mode.")
     orient_parser.add_argument("--thread-label", help="Optional human label for this thread.")
     orient_parser.add_argument("--thread-purpose", help="Optional concise purpose for this thread.")
     orient_parser.add_argument("--attach", action="store_true", help="Write thread metadata to sidecar when the route is safe or confirmed.")
@@ -6726,6 +7055,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(load_handoff_parser)
     load_handoff_parser.add_argument("--query", help="Natural-language task query, continue phrase, alias, branch, or worktree hint.")
     load_handoff_parser.add_argument("--task-id", help="Task id to load. Takes precedence over --query.")
+    load_handoff_parser.add_argument("--thread-id", help="Optional internal thread id used to select thread metadata.")
+    load_handoff_parser.add_argument("--thread-role", help="Optional thread role used to select thread metadata.")
     load_handoff_parser.add_argument("--mode", choices=sorted(LOAD_HANDOFF_MODES), default="compact", help="Load compact receipt by default; section/full require explicit mode.")
     load_handoff_parser.add_argument("--section", choices=sorted(LOAD_HANDOFF_SECTIONS), default="", help="Handoff section to load when --mode section is used.")
     load_handoff_parser.add_argument("--reason", choices=sorted(LOAD_HANDOFF_REASONS), default="resume", help="Audit reason for this handoff load.")
