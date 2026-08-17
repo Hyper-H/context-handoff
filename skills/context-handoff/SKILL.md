@@ -1,31 +1,36 @@
 ---
 name: context-handoff
-description: Conversation-first local project context layer for Codex worktrees using the context sidecar CLI.
+description: Legacy-compatible Agent Workflow Hub entrypoint for Codex project routing, worktrees, handoffs, audits, validation, and safety state through the local context sidecar CLI.
 ---
 
 # Context Handoff
 
-> Legacy compatibility entrypoint: `$context-handoff` remains supported, but new projects and docs should prefer `$agent-workflow-hub` from V2.7 onward. This package uses the same local sidecar data and compatible CLI.
+Use this legacy compatibility entrypoint when `$agent-workflow-hub` is unavailable or an existing workflow invokes `$context-handoff`. Prefer `$agent-workflow-hub` in new prompts. Both packages use the same local sidecar data, schema, CLI actions, and behavioral contract.
 
-Use this skill when the user wants to start, resume, hand off, finish, inspect, audit project hub state, or report on feature work for the current repository. Keep normal interaction conversational. The Python sidecar CLI is the implementation layer, not the primary user experience.
+## Core Model
 
-## Implementation Layer
+- Keep normal small tasks in one Codex Task by default. Recommend a new Task or Git worktree only for independent, parallel, long-lived, separately based, or explicitly requested work.
+- Do not load a reference or create durable sidecar state for a routine small task unless routing, continuity, audit, or handoff needs it.
+- Use `Project context -> Task -> Thread -> Environment(optional)`. Multiple threads may share a task or environment; project-level threads may have no worktree.
+- Treat sidecar state as auditable routing and continuity evidence, not proof of correctness or a memory replacement. Re-check current Git state, files, and validation when needed.
+- Keep dynamic workflow state under `%USERPROFILE%\.codex\projects\<project-id>\`, never in tracked repo docs. Store concise facts and receipts, not transcripts, long logs, or model reasoning.
+- Use `threadLabel` in conversation; `threadId` is an internal machine key. Sidecar `threads[]` is workflow truth. Codex thread discovery supplies only best-effort metadata evidence.
 
-Use the bundled sidecar CLI in this skill package. Do not ask the user to paste a CLI path during normal use.
+## CLI Entry
 
-Run actions through:
+Run the bundled compatibility CLI, resolving the script relative to this `SKILL.md`:
 
 ```powershell
 python scripts\context_sidecar.py <action> --worktree <current-worktree>
 ```
 
-If the current working directory is the installed skill directory, use the relative script path above. If running from another directory, resolve `scripts\context_sidecar.py` relative to this `SKILL.md` file and pass the user's current repository or worktree through `--worktree`.
+Pass the user's current repository/worktree through `--worktree`; do not ask the user for the script path. Do not require MCP.
 
-The user can still say `Use $context-handoff ...` for compatibility, but prefer `Use $agent-workflow-hub ...` for new work. CLI path resolution is the agent's responsibility.
+For multi-worktree projects, keep one stable project identity. Resolution order is `--project-id`, `CONTEXT_HANDOFF_PROJECT_ID`, local sidecar config, Git remote/common-dir, then repo-root fallback. Use `--project-id` only to correct inference and `--base-branch` only when the feature base differs.
 
-If the user asks to update, repair, reinstall, inspect, or debug this skill, first read `references/maintenance.md`. The installed skill directory is not the canonical source repo.
+Before the first action, use `doctor` when readiness is uncertain; use `setup` only when the sidecar layout is missing.
 
-The sidecar stays local at:
+## Default Routing
 
 ```text
 %USERPROFILE%\.codex\projects\<project-id>\
@@ -333,26 +338,37 @@ Handoffs must distinguish:
 
 The sidecar records `headSha`, `upstream`, `dirtyFiles`, and `dirtyFingerprint`. Treat `resume-feature` stale output as a warning to re-check current files before trusting an older handoff.
 
-## Dogfood Issue Guidance
+If routing is ambiguous, mismatch, or needs review, surface that state and ask the returned short disambiguation question. Do not guess or convert inferred routing into user-confirmed routing. Respect branch, task-id, and worktree hints from the user or handoff.
 
-Dogfood issue reporting is draft-only by default. Issue drafts and created issues must keep Facts, Inferences, Unknowns, Reproduction, Suggested Fix, and Priority separate.
+## Compact Context Defaults
 
-Before creating a GitHub issue, the CLI checks GitHub CLI authentication, searches for similar open issues, and blocks creation when content appears to include secrets, private paths, long logs, or other sensitive material. Created issues always receive `agent-reported` and `needs-triage` labels. If GitHub CLI is unavailable, unauthenticated, unsafe, or likely duplicate, return the generated draft instead.
+- Summarize action results conversationally; do not paste full sidecar JSON.
+- `load-handoff` defaults to compact receipt, next step, risks/blockers, and continue phrase.
+- Load one named section with a concrete reason when compact state is insufficient.
+- Load a full handoff only when the user explicitly requests it or targeted loading cannot answer a continuation question.
+- Keep handoffs structured, concise, and directly pasteable. Log only loading metadata, never handoff content.
+- Hub threads should prefer audits, compact receipts, project status, and recommended actions over full task handoffs.
 
-## Output Style
+## Safety And Output
 
-For single feature actions, return a short conversational summary:
+- Never delete worktrees or rewrite historical sidecar records automatically. Require explicit confirmation for archive/cleanup actions that expose confirmation flags.
+- Create GitHub PRs or issues only when explicitly authorized and the CLI is authenticated; preserve draft-only dogfood behavior otherwise.
+- Keep Facts, Inferences, Unknowns, validation evidence, and safety rules distinct. Treat stale handoffs as warnings to re-check current state.
+- Lead single-task responses with `compactReceipt`, `continuePhrase`, status, next step, risks/blockers, and links when useful.
+- Keep machine keys, actions, enums, branches, paths, and Git output in English/original form. Use `--language zh-CN` for Chinese human-facing output and `--language en` for English; persist a stated preference with `set-language`.
 
-- Lead with `compactReceipt` and the natural-language `continuePhrase` when a handoff was saved.
-- Current task and status.
-- Latest useful next step.
-- Handoff or report path when useful for debugging or automation.
-- PR URL when known, or generated PR title/body guidance when GitHub CLI is unavailable.
+## Compatibility And Installation
 
-For project hub actions, do not only return a short current-task summary. Always include compact inventory counts, a table of worktrees, grouped backfill prompts, recommended actions, execution-thread prompts, and cleanup prompts. Avoid pasting long sidecar JSON or full weekly reports unless the user asks for detail.
+- Keep `$context-handoff` supported, but prefer `$agent-workflow-hub` in new prompts.
+- Keep both installed packages compatible in scripts, references, schema, sidecar paths, and behavior.
+- Use source `install.py` to deploy both packages without migrating or rewriting existing sidecar state.
 
-## Advanced / Legacy Actions
+## Load References Only When Needed
 
-- `init`: Legacy alias for sidecar setup. Prefer `setup`.
-- `intake`: Legacy low-level resume JSON. Prefer `resume-feature`.
-- `archive`: Advanced manual archive. Prefer `finish-feature` when a feature is complete.
+- Read [routing-handoffs.md](references/routing-handoffs.md) for detailed natural-language resolution, aliases, route confirmation, handoff loading, or thread registration.
+- Read [thread-role-charters.md](references/thread-role-charters.md) when starting or explaining a role, deciding role boundaries, or generating a role-aware handoff.
+- Read [project-hub.md](references/project-hub.md) for whole-project audit tables, worktree coverage, visualization, cleanup prompts, or Project Hub reporting.
+- Read [action-catalog.md](references/action-catalog.md) when choosing among less-common CLI actions or needing exact action intent.
+- Read [prompt-templates.md](references/prompt-templates.md) only when the user asks for a new Task/thread, hub, research, execution, review, or dogfood prompt.
+- Read [advanced-workflows.md](references/advanced-workflows.md) for rebaseline, dogfood hygiene/issues, backfill, evaluation, reports, or advanced archive behavior.
+- Read [maintenance.md](references/maintenance.md) before updating, repairing, reinstalling, inspecting, or debugging this skill. Installed skill directories are deployment copies, not canonical source.
