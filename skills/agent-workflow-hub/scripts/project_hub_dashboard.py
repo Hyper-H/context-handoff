@@ -10,7 +10,7 @@ def _json_for_script(payload: dict[str, Any]) -> str:
 
 def build_visual_project_html(report: dict[str, Any]) -> str:
     payload = dict(report)
-    payload["dashboardVersion"] = "v3.4"
+    payload["dashboardVersion"] = "v4.0"
     data = _json_for_script(payload)
     html = """<!doctype html>
 <html lang="zh-CN">
@@ -915,7 +915,7 @@ def build_visual_project_html(report: dict[str, Any]) -> str:
     <div class="shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Project Hub / V3.4 Static Dashboard</p>
+          <p class="eyebrow">Project Hub / V4.0 Static Dashboard</p>
           <h1 id="projectTitle"></h1>
           <p id="projectSubtitle" class="subtitle"></p>
         </div>

@@ -6507,6 +6507,18 @@ def cmd_visualize_project(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_project_hub_payload(args: argparse.Namespace) -> int:
+    manager = make_manager(args)
+    report = build_visual_project_payload(
+        manager,
+        bool(args.include_archive),
+        resolve_language(args, manager),
+        persist_project_state=False,
+    )
+    print(json.dumps(report, ensure_ascii=False))
+    return 0
+
+
 def issue_output(manager: SidecarManager, args: argparse.Namespace, *, create: bool, language: str = "en") -> dict[str, Any]:
     title, body = build_issue_text(manager, args, language)
     sensitive_findings = sensitive_issue_findings(title, body)
@@ -6875,6 +6887,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(visualize_project_parser)
     visualize_project_parser.add_argument("--include-archive", action="store_true", help="Include archived tasks in the visualization.")
     visualize_project_parser.set_defaults(func=cmd_visualize_project)
+
+    project_hub_payload_parser = subparsers.add_parser("project-hub-payload", help="Print the read-only Project Hub payload without writing reports")
+    add_common(project_hub_payload_parser)
+    project_hub_payload_parser.add_argument("--include-archive", action="store_true", help="Include archived tasks in the payload.")
+    project_hub_payload_parser.set_defaults(func=cmd_project_hub_payload)
 
     draft_issue_parser = subparsers.add_parser("draft-issue", help="Generate a dogfood issue draft without requiring gh")
     add_common(draft_issue_parser)
