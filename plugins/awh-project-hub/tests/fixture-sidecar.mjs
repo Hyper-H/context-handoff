@@ -1,0 +1,45 @@
+const payload = {
+  schemaVersion: "awh.project-hub/v1",
+  project: {
+    projectId: "stdio-fixture",
+    baseBranch: "main",
+    generatedAt: new Date().toISOString(),
+    health: "attention",
+  },
+  summary: { visibleTasks: 1 },
+  workItems: [{
+    workItemId: "work-item-1",
+    title: "MCP contract fixture",
+    status: "active",
+    health: "attention",
+    codexTasks: [{
+      taskKey: "thread-1",
+      threadId: "thread-1",
+      codexThreadId: "codex-task-1",
+      label: "Execution",
+      role: "primary-execution",
+      purpose: "Exercise the MCP contract",
+      status: "active",
+      environment: {
+        type: "worktree",
+        worktreePath: "C:/fixture",
+        branch: "codex/fixture",
+        dirty: false,
+        stale: false,
+        dirtyFiles: [],
+      },
+    }],
+    blocker: "",
+    nextStep: "Validate",
+    validationPresent: true,
+    handoffAvailable: true,
+    routing: { status: "confirmed", confidence: 1, needsReview: false, evidence: ["fixture"] },
+    machine: { taskId: "work-item-1" },
+  }],
+  needsAttention: [{ taskId: "work-item-1" }],
+  warnings: [],
+  canonicalRepoRoot: "C:/fixture",
+  sidecarRoot: "C:/sidecar",
+};
+
+process.stdout.write(JSON.stringify(payload));

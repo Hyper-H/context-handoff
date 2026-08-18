@@ -1,0 +1,28 @@
+{
+  "name": "awh-project-hub",
+  "version": "0.1.0",
+  "description": "Read-only fullscreen Project Hub for Agent Workflow Hub",
+  "author": {
+    "name": "Hyper-H",
+    "url": "https://github.com/Hyper-H"
+  },
+  "homepage": "https://github.com/Hyper-H/Agent-Workflow-Hub",
+  "repository": "https://github.com/Hyper-H/Agent-Workflow-Hub",
+  "license": "MIT",
+  "keywords": ["agent-workflow-hub", "project-hub", "mcp-apps", "codex"],
+  "interface": {
+    "displayName": "AWH Project Hub",
+    "shortDescription": "Inspect AWH work items and Codex tasks",
+    "longDescription": "Open a read-only Agent Workflow Hub dashboard backed by live local sidecar and Git worktree data, with an inline launcher and fullscreen workspace.",
+    "developerName": "Hyper-H",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read"],
+    "brandColor": "#24635B",
+    "defaultPrompt": [
+      "Open the AWH Project Hub for this worktree",
+      "Show current AWH blockers and unhealthy work items",
+      "Refresh the AWH Project Hub"
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

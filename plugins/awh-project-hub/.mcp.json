@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "awh-project-hub": {
+      "cwd": ".",
+      "command": "node",
+      "args": ["./dist/server.mjs"]
+    }
+  }
+}
