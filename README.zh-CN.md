@@ -72,6 +72,31 @@ Use $agent-workflow-hub to save a handoff before I stop today.
 Use $agent-workflow-hub to audit this project hub across all worktrees.
 ```
 
+## 可选的全屏 Project Hub
+
+仓库包含一个本地、只读的 MCP App，用于在 Codex 中查看实时 AWH sidecar。先安装 skills 和插件源码，再注册 personal plugin：
+
+```powershell
+python install.py
+codex plugin add awh-project-hub@personal
+```
+
+首次安装后，或插件 metadata 更新并重装后，需要新建一个 Codex task，让 MCP server 和 tools 重新加载。建议固定一个 task 作为 AWH Hub Task，然后输入：
+
+```text
+Open the AWH Project Hub for this worktree
+```
+
+工具会先显示 inline launcher。选择 **Open fullscreen** 后可查看 Work Item、Codex Task、Role、Environment、health、blocker 和详情。Refresh 会从 sidecar 获取新的权威快照；iframe 只保留搜索、筛选、选择等展示状态。fullscreen 中原生 Codex composer 仍然可用，继续承担项目问答。
+
+首版严格只读。创建 task、修改状态、编辑 blocker、修改 routing 等写操作会等用户审核后再考虑。
+
+静态 dashboard 继续作为 fallback：
+
+```text
+Use $agent-workflow-hub to visualize this project.
+```
+
 ## Core Workflow
 
 默认心智模型是：
@@ -147,14 +172,15 @@ clone 本仓库后运行：
 python install.py
 ```
 
-安装器会把两个完整 skill 包复制到：
+安装器会把两个完整 skill 包和已构建的本地插件源码复制到：
 
 ```text
 %USERPROFILE%\.codex\skills\agent-workflow-hub\
 %USERPROFILE%\.codex\skills\context-handoff\
+%USERPROFILE%\plugins\awh-project-hub\
 ```
 
-如果 Codex 没有立刻刷新 skill 列表，请重启或刷新 Codex。安装器只复制 skill 包，不会安装 GitHub CLI，不会登录账号，也不会修改全局 Codex 配置。
+安装器还会安全地添加或替换 `%USERPROFILE%\.agents\plugins\marketplace.json` 中唯一的 `awh-project-hub` 条目，保留其他插件条目和 marketplace metadata。随后运行 `codex plugin add awh-project-hub@personal` 并新建一个 Codex task。安装器不会安装 GitHub CLI，也不会登录账号。只安装 skill 包时可使用 `python install.py --skip-plugin`。
 
 ## Compatibility
 

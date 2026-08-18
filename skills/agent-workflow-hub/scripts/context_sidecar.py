@@ -3132,6 +3132,9 @@ PROJECT_HUB_SCHEMA_VERSION = "awh.project-hub/v1"
 
 
 def project_hub_environment(thread: dict[str, Any], row: dict[str, Any]) -> dict[str, Any] | None:
+    explicit_environment_type = str(thread.get("environmentType") or "").strip().casefold()
+    if explicit_environment_type in {"none", "no-environment"}:
+        return None
     worktree_path = str(thread.get("worktreePath") or row.get("worktreePath") or "")
     environment_type = str(thread.get("environmentType") or ("worktree" if worktree_path else ""))
     if not worktree_path and not environment_type:

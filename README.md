@@ -72,6 +72,31 @@ Audit the whole project hub:
 Use $agent-workflow-hub to audit this project hub across all worktrees.
 ```
 
+## Optional Fullscreen Project Hub
+
+The repository includes a local, read-only MCP App for inspecting the live AWH sidecar in Codex. Install the skills and plugin source, then register the personal plugin:
+
+```powershell
+python install.py
+codex plugin add awh-project-hub@personal
+```
+
+After installation or any plugin metadata update, open a new Codex task so the MCP server and tools are reloaded. Pin one task as the AWH Hub Task and ask:
+
+```text
+Open the AWH Project Hub for this worktree
+```
+
+The tool first renders an inline launcher. Choose **Open fullscreen** for the Work Item, Codex Task, Role, Environment, health, blocker, and detail views. Refresh reads a new authoritative snapshot from the sidecar; only search, filters, selection, and other presentation state stay in the iframe. The native Codex composer remains available in fullscreen for project questions.
+
+The first version is read-only. Task creation, status changes, blocker edits, routing edits, and other state-changing controls are intentionally deferred until user review.
+
+The static dashboard remains available as a fallback:
+
+```text
+Use $agent-workflow-hub to visualize this project.
+```
+
 ## Core Workflow
 
 The default mental model is:
@@ -147,14 +172,15 @@ Clone this repository, then run:
 python install.py
 ```
 
-The installer copies both complete skill packages to:
+The installer copies both complete skill packages and the built local plugin source to:
 
 ```text
 %USERPROFILE%\.codex\skills\agent-workflow-hub\
 %USERPROFILE%\.codex\skills\context-handoff\
+%USERPROFILE%\plugins\awh-project-hub\
 ```
 
-Restart or refresh Codex if the skill list does not update immediately. The installer only copies skill packages; it does not install GitHub CLI, authenticate accounts, or change global Codex configuration.
+It also safely adds or replaces only the `awh-project-hub` entry in `%USERPROFILE%\.agents\plugins\marketplace.json`, preserving unrelated entries and marketplace metadata. Then run `codex plugin add awh-project-hub@personal` and open a new Codex task. The installer does not install GitHub CLI or authenticate accounts. Use `python install.py --skip-plugin` when only the skill packages should be installed.
 
 ## Compatibility
 
