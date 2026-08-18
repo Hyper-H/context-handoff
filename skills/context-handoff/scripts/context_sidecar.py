@@ -3089,8 +3089,10 @@ def base_visual_row_from_task(task: dict[str, Any], *, archived: bool = False) -
     handoff_available = bool(task.get("_handoffAvailable", False))
     row = {
         "taskId": task.get("taskId", ""),
+        "goal": task.get("goal", ""),
         "branch": task.get("branch", ""),
         "worktreePath": task.get("worktreePath", ""),
+        "threads": [dict(item) for item in task.get("threads", []) if isinstance(item, dict)],
         "threadRole": task.get("threadRole", "") or "primary-execution",
         "threadLabel": task.get("threadLabel", ""),
         "threadPurpose": task.get("threadPurpose", ""),
@@ -3126,10 +3128,109 @@ def base_visual_row_from_task(task: dict[str, Any], *, archived: bool = False) -
     return row
 
 
-def build_visual_project_payload(manager: SidecarManager, include_archive: bool, language: str) -> dict[str, Any]:
+PROJECT_HUB_SCHEMA_VERSION = "awh.project-hub/v1"
+
+
+def project_hub_environment(thread: dict[str, Any], row: dict[str, Any]) -> dict[str, Any] | None:
+    worktree_path = str(thread.get("worktreePath") or row.get("worktreePath") or "")
+    environment_type = str(thread.get("environmentType") or ("worktree" if worktree_path else ""))
+    if not worktree_path and not environment_type:
+        return None
+    return {
+        "type": environment_type or "worktree",
+        "worktreePath": worktree_path,
+        "branch": row.get("branch", ""),
+        "dirty": bool(row.get("dirty")),
+        "stale": bool(row.get("stale")),
+        "dirtyFiles": list(row.get("dirtyFiles") or []),
+    }
+
+
+def project_hub_codex_tasks(row: dict[str, Any]) -> list[dict[str, Any]]:
+    threads = [dict(item) for item in row.get("threads", []) if isinstance(item, dict)]
+    if not threads and any(row.get(key) for key in ("threadRole", "threadLabel", "threadPurpose")):
+        threads = [
+            {
+                "threadId": f"legacy:{row.get('taskId', 'unknown')}",
+                "codexThreadId": "",
+                "threadRole": row.get("threadRole", "primary-execution"),
+                "threadLabel": row.get("threadLabel", ""),
+                "threadPurpose": row.get("threadPurpose", ""),
+                "environmentType": "worktree" if row.get("worktreePath") else "",
+                "worktreePath": row.get("worktreePath", ""),
+            }
+        ]
+    return [
+        {
+            "taskKey": str(thread.get("threadId") or thread.get("codexThreadId") or f"thread:{index}"),
+            "threadId": str(thread.get("threadId") or ""),
+            "codexThreadId": str(thread.get("codexThreadId") or ""),
+            "label": str(thread.get("threadLabel") or thread.get("threadRole") or "Codex Task"),
+            "role": str(thread.get("threadRole") or "primary-execution"),
+            "purpose": str(thread.get("threadPurpose") or ""),
+            "status": str(thread.get("phase") or row.get("taskStatus") or ""),
+            "environment": project_hub_environment(thread, row),
+        }
+        for index, thread in enumerate(threads)
+    ]
+
+
+def build_project_hub_contract(report: dict[str, Any]) -> dict[str, Any]:
+    work_items: list[dict[str, Any]] = []
+    for source in report.get("taskRows", []):
+        row = dict(source)
+        work_item_id = str(row.get("taskId") or "unknown")
+        work_items.append(
+            {
+                "workItemId": work_item_id,
+                "title": str(row.get("goal") or humanize_identifier(work_item_id)),
+                "status": str(row.get("taskStatus") or "missing"),
+                "health": str(row.get("health") or "attention"),
+                "codexTasks": project_hub_codex_tasks(row),
+                "blocker": str(row.get("blocker") or ""),
+                "nextStep": str(row.get("nextStep") or ""),
+                "validationPresent": bool(row.get("validationPresent")),
+                "handoffAvailable": bool(row.get("handoffAvailable")),
+                "routing": {
+                    "status": str(row.get("routingStatus") or ""),
+                    "confidence": row.get("routingConfidence"),
+                    "needsReview": bool(row.get("routingNeedsReview")),
+                    "evidence": list(row.get("routingEvidence") or []),
+                },
+                "machine": row,
+            }
+        )
+    health = "blocked" if any(item["health"] == "blocked" for item in work_items) else (
+        "attention" if any(item["health"] == "attention" for item in work_items) else "healthy"
+    )
+    return {
+        "schemaVersion": PROJECT_HUB_SCHEMA_VERSION,
+        "project": {
+            "projectId": report.get("projectId", ""),
+            "baseBranch": report.get("baseBranch", ""),
+            "generatedAt": report.get("generatedAt", ""),
+            "health": health,
+        },
+        "summary": dict(report.get("summaryCounts") or {}),
+        "workItems": work_items,
+        "needsAttention": list(report.get("needsAttention") or []),
+        "warnings": list(report.get("warnings") or []),
+    }
+
+
+def build_visual_project_payload(
+    manager: SidecarManager,
+    include_archive: bool,
+    language: str,
+    *,
+    persist_project_state: bool = True,
+) -> dict[str, Any]:
     payload = manager.load_active_tasks()
     tasks = payload.get("tasks", [])
-    state = manager.write_project_state(tasks)
+    state = manager.write_project_state(tasks) if persist_project_state else {
+        "activeTaskCount": len(tasks),
+        "currentBranch": manager.git.branch,
+    }
     worktrees, worktree_error = parse_git_worktree_list(manager.git.repo_root)
 
     rows: list[dict[str, Any]] = []
@@ -3147,6 +3248,8 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
             audit = audit_context_payload(wt_manager, payload, language)
             row = worktree_audit_row(item, audit, wt_manager)
             task = audit.get("task") or {}
+            row["goal"] = task.get("goal", "")
+            row["threads"] = [dict(thread) for thread in task.get("threads", []) if isinstance(thread, dict)]
             row["aliases"] = task.get("aliases", [])
             row["parentTaskId"] = task.get("parentTaskId", "")
             row["phase"] = task.get("phase", "")
@@ -3228,8 +3331,11 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
         task_rows.append(
             {
                 "taskId": row.get("taskId", "") or row.get("branch", "") or Path(str(row.get("worktreePath") or "")).name or "unknown",
+                "goal": row.get("goal", ""),
                 "branch": row.get("branch", ""),
                 "worktreePath": row.get("worktreePath", ""),
+                "threads": row.get("threads", []),
+                "dirtyFiles": row.get("dirtyFiles", []),
                 "threadRole": row.get("threadRole", "primary-execution"),
                 "threadLabel": row.get("threadLabel", ""),
                 "threadDisplayLabel": row.get("threadDisplayLabel", "") or row.get("threadLabel", "") or row.get("threadRole", ""),
@@ -3392,7 +3498,7 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
     if errors:
         warnings.append(f"{len(errors)} worktree audit error(s) were omitted from the graph.")
 
-    return {
+    report = {
         "projectId": manager.project_id,
         "generatedAt": now_iso(),
         "language": normalize_language(language),
@@ -3416,6 +3522,8 @@ def build_visual_project_payload(manager: SidecarManager, include_archive: bool,
         },
         "reportPaths": {},
     }
+    report.update(build_project_hub_contract(report))
+    return report
 
 
 def build_visual_project_markdown(report: dict[str, Any]) -> str:
