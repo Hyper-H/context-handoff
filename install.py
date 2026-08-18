@@ -2,15 +2,33 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
+import tempfile
 from pathlib import Path
+from typing import Any
 
 
 SKILL_NAMES = ["agent-workflow-hub", "context-handoff"]
+PLUGIN_NAME = "awh-project-hub"
+PLUGIN_REQUIRED_FILES = (
+    ".codex-plugin/plugin.json",
+    ".mcp.json",
+    "dist/server.mjs",
+    "dist/widget.html",
+)
 
 
 def default_codex_home() -> Path:
     return Path.home() / ".codex"
+
+
+def default_plugin_home() -> Path:
+    return Path.home() / "plugins"
+
+
+def default_marketplace_path() -> Path:
+    return Path.home() / ".agents" / "plugins" / "marketplace.json"
 
 
 def copy_skill(skill_name: str, source: Path, destination: Path, dry_run: bool) -> None:
@@ -42,12 +60,161 @@ def copy_skill(skill_name: str, source: Path, destination: Path, dry_run: bool) 
     print("")
 
 
+def validate_plugin_source(source: Path) -> None:
+    for relative_path in PLUGIN_REQUIRED_FILES:
+        if not (source / relative_path).is_file():
+            raise SystemExit(f"plugin source is missing {relative_path}: {source}")
+
+
+def load_marketplace(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {
+            "name": "personal",
+            "interface": {"displayName": "Personal"},
+            "plugins": [],
+        }
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"failed to read marketplace JSON: {path}: {error}") from error
+    if not isinstance(value, dict):
+        raise SystemExit(f"marketplace root must be a JSON object: {path}")
+    plugins = value.get("plugins")
+    if plugins is None:
+        value["plugins"] = []
+    elif not isinstance(plugins, list):
+        raise SystemExit(f"marketplace plugins must be a JSON array: {path}")
+    return value
+
+
+def awh_marketplace_entry() -> dict[str, Any]:
+    return {
+        "name": PLUGIN_NAME,
+        "source": {"source": "local", "path": f"./plugins/{PLUGIN_NAME}"},
+        "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+        "category": "Productivity",
+    }
+
+
+def upsert_plugin_entry(marketplace: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(marketplace)
+    plugins = marketplace.get("plugins", [])
+    updated["plugins"] = [
+        item
+        for item in plugins
+        if not isinstance(item, dict) or item.get("name") != PLUGIN_NAME
+    ]
+    updated["plugins"].append(awh_marketplace_entry())
+    return updated
+
+
+def write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+            newline="\n",
+        ) as stream:
+            json.dump(value, stream, indent=2, ensure_ascii=False)
+            stream.write("\n")
+            temporary_path = Path(stream.name)
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+
+
+def copy_plugin(source: Path, destination: Path, dry_run: bool) -> None:
+    validate_plugin_source(source)
+    print(f"Installing {PLUGIN_NAME} plugin")
+    print(f"Source: {source}")
+    print(f"Target: {destination}")
+    if dry_run:
+        print("Dry run only; no files were changed.")
+        print("")
+        return
+    if destination.exists():
+        print("Existing plugin source found; replacing AWH-owned files.")
+        shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        source,
+        destination,
+        ignore=shutil.ignore_patterns("node_modules", "__pycache__", "*.pyc"),
+    )
+    print("")
+
+
+def install_marketplace_entry(path: Path, dry_run: bool) -> str:
+    marketplace = load_marketplace(path)
+    name = marketplace.get("name", "personal")
+    if not isinstance(name, str) or not name.strip():
+        raise SystemExit(f"marketplace name must be a non-empty string: {path}")
+    updated = upsert_plugin_entry(marketplace)
+    print(f"Personal marketplace: {path}")
+    if dry_run:
+        print("Dry run only; marketplace was not changed.")
+    else:
+        write_json_atomic(path, updated)
+        print(f"Updated {PLUGIN_NAME} in marketplace {name}.")
+    print("")
+    return name
+
+
+def run_install(args: argparse.Namespace, *, repo_root: Path) -> int:
+    codex_home = Path(args.codex_home).expanduser().resolve()
+    for skill_name in SKILL_NAMES:
+        copy_skill(
+            skill_name,
+            repo_root / "skills" / skill_name,
+            codex_home / "skills" / skill_name,
+            args.dry_run,
+        )
+
+    if args.skip_plugin:
+        return 0
+
+    plugin_home = Path(args.plugin_home).expanduser().resolve()
+    marketplace_path = Path(args.marketplace_path).expanduser().resolve()
+    copy_plugin(
+        repo_root / "plugins" / PLUGIN_NAME,
+        plugin_home / PLUGIN_NAME,
+        args.dry_run,
+    )
+    marketplace_name = install_marketplace_entry(marketplace_path, args.dry_run)
+    print("Register or reinstall the plugin with:")
+    print(f"codex plugin add {PLUGIN_NAME}@{marketplace_name}")
+    print("Open a new Codex task after installation so the MCP tools are refreshed.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Install the Agent Workflow Hub and context-handoff Codex skill packages.")
     parser.add_argument(
         "--codex-home",
         default=str(default_codex_home()),
         help="Codex home directory. Defaults to ~/.codex.",
+    )
+    parser.add_argument(
+        "--plugin-home",
+        default=str(default_plugin_home()),
+        help="Personal plugin source directory. Defaults to ~/plugins.",
+    )
+    parser.add_argument(
+        "--marketplace-path",
+        default=str(default_marketplace_path()),
+        help="Personal marketplace JSON path. Defaults to ~/.agents/plugins/marketplace.json.",
+    )
+    parser.add_argument(
+        "--skip-plugin",
+        action="store_true",
+        help="Install the skill packages without installing the Project Hub plugin.",
     )
     parser.add_argument(
         "--dry-run",
@@ -60,11 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     repo_root = Path(__file__).resolve().parent
-    codex_home = Path(args.codex_home).expanduser().resolve()
-    for skill_name in SKILL_NAMES:
-        source = repo_root / "skills" / skill_name
-        destination = codex_home / "skills" / skill_name
-        copy_skill(skill_name, source, destination, args.dry_run)
+    run_install(args, repo_root=repo_root)
     if not args.dry_run:
         print("Installed successfully.")
         print("Restart or refresh Codex if the skill list does not update immediately.")
