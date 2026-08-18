@@ -39,13 +39,19 @@ class InstallerTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("{}\n", encoding="utf-8")
 
-    def args(self, *, dry_run: bool = False) -> argparse.Namespace:
+    def args(
+        self,
+        *,
+        dry_run: bool = False,
+        skip_skills: bool = False,
+    ) -> argparse.Namespace:
         return argparse.Namespace(
             codex_home=str(self.codex_home),
             plugin_home=str(self.plugin_home),
             marketplace_path=str(self.marketplace),
             dry_run=dry_run,
             skip_plugin=False,
+            skip_skills=skip_skills,
         )
 
     def write_marketplace(self, value: dict[str, object]) -> None:
@@ -110,6 +116,14 @@ class InstallerTests(unittest.TestCase):
 
         with self.assertRaisesRegex(SystemExit, "dist/server.mjs"):
             run_install(self.args(), repo_root=self.source_root)
+
+    def test_skip_skills_installs_only_plugin(self) -> None:
+        run_install(self.args(skip_skills=True), repo_root=self.source_root)
+
+        self.assertFalse(self.codex_home.exists())
+        self.assertTrue((self.plugin_home / "awh-project-hub" / "dist" / "server.mjs").is_file())
+        installed = json.loads(self.marketplace.read_text(encoding="utf-8"))
+        self.assertEqual(installed["plugins"][0]["name"], "awh-project-hub")
 
 
 if __name__ == "__main__":

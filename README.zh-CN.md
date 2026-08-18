@@ -180,7 +180,7 @@ python install.py
 %USERPROFILE%\plugins\awh-project-hub\
 ```
 
-安装器还会安全地添加或替换 `%USERPROFILE%\.agents\plugins\marketplace.json` 中唯一的 `awh-project-hub` 条目，保留其他插件条目和 marketplace metadata。随后运行 `codex plugin add awh-project-hub@personal` 并新建一个 Codex task。安装器不会安装 GitHub CLI，也不会登录账号。只安装 skill 包时可使用 `python install.py --skip-plugin`。
+安装器还会安全地添加或替换 `%USERPROFILE%\.agents\plugins\marketplace.json` 中唯一的 `awh-project-hub` 条目，保留其他插件条目和 marketplace metadata。随后运行 `codex plugin add awh-project-hub@personal` 并新建一个 Codex task。安装器不会安装 GitHub CLI，也不会登录账号。只安装 skill 包时可使用 `python install.py --skip-plugin`；需要保留单独维护的已安装 skill 时可使用 `python install.py --skip-skills`。
 
 ## Compatibility
 

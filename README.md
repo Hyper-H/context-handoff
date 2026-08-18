@@ -180,7 +180,7 @@ The installer copies both complete skill packages and the built local plugin sou
 %USERPROFILE%\plugins\awh-project-hub\
 ```
 
-It also safely adds or replaces only the `awh-project-hub` entry in `%USERPROFILE%\.agents\plugins\marketplace.json`, preserving unrelated entries and marketplace metadata. Then run `codex plugin add awh-project-hub@personal` and open a new Codex task. The installer does not install GitHub CLI or authenticate accounts. Use `python install.py --skip-plugin` when only the skill packages should be installed.
+It also safely adds or replaces only the `awh-project-hub` entry in `%USERPROFILE%\.agents\plugins\marketplace.json`, preserving unrelated entries and marketplace metadata. Then run `codex plugin add awh-project-hub@personal` and open a new Codex task. The installer does not install GitHub CLI or authenticate accounts. Use `python install.py --skip-plugin` when only the skill packages should be installed, or `python install.py --skip-skills` when preserving a separately maintained skill installation.
 
 ## Compatibility
 

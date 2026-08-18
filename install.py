@@ -168,14 +168,15 @@ def install_marketplace_entry(path: Path, dry_run: bool) -> str:
 
 
 def run_install(args: argparse.Namespace, *, repo_root: Path) -> int:
-    codex_home = Path(args.codex_home).expanduser().resolve()
-    for skill_name in SKILL_NAMES:
-        copy_skill(
-            skill_name,
-            repo_root / "skills" / skill_name,
-            codex_home / "skills" / skill_name,
-            args.dry_run,
-        )
+    if not args.skip_skills:
+        codex_home = Path(args.codex_home).expanduser().resolve()
+        for skill_name in SKILL_NAMES:
+            copy_skill(
+                skill_name,
+                repo_root / "skills" / skill_name,
+                codex_home / "skills" / skill_name,
+                args.dry_run,
+            )
 
     if args.skip_plugin:
         return 0
@@ -215,6 +216,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-plugin",
         action="store_true",
         help="Install the skill packages without installing the Project Hub plugin.",
+    )
+    parser.add_argument(
+        "--skip-skills",
+        action="store_true",
+        help="Install the Project Hub plugin without replacing existing skill packages.",
     )
     parser.add_argument(
         "--dry-run",
