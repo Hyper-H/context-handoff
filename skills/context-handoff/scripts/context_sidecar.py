@@ -3135,6 +3135,15 @@ def project_hub_environment(thread: dict[str, Any], row: dict[str, Any]) -> dict
     explicit_environment_type = str(thread.get("environmentType") or "").strip().casefold()
     if explicit_environment_type in {"none", "no-environment"}:
         return None
+    if explicit_environment_type and explicit_environment_type != "worktree":
+        return {
+            "type": str(thread.get("environmentType")),
+            "worktreePath": str(thread.get("worktreePath") or ""),
+            "branch": str(thread.get("branch") or ""),
+            "dirty": bool(thread.get("dirty")),
+            "stale": bool(thread.get("stale")),
+            "dirtyFiles": list(thread.get("dirtyFiles") or []),
+        }
     worktree_path = str(thread.get("worktreePath") or row.get("worktreePath") or "")
     environment_type = str(thread.get("environmentType") or ("worktree" if worktree_path else ""))
     if not worktree_path and not environment_type:

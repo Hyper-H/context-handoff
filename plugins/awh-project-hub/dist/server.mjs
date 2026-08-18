@@ -22019,7 +22019,7 @@ var require_dist = __commonJS({
 // src/server.ts
 import { readFileSync } from "node:fs";
 import path2 from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath as fileURLToPath2, pathToFileURL } from "node:url";
 
 // node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/helpers/util.js
 var util;
@@ -31706,8 +31706,8 @@ var StdioServerTransport = class {
 
 // src/sidecar-client.ts
 import { execFile } from "node:child_process";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // src/types.ts
 var EnvironmentSchema = external_exports.object({
@@ -31795,11 +31795,8 @@ var SidecarClient = class {
     this.run = options.run ?? defaultRunner;
     this.python = options.python ?? process.env.AWH_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
     this.script = options.script ?? process.env.AWH_SIDECAR_SCRIPT ?? path.join(
-      os.homedir(),
-      ".codex",
-      "skills",
-      "agent-workflow-hub",
-      "scripts",
+      path.dirname(fileURLToPath(import.meta.url)),
+      "sidecar",
       "context_sidecar.py"
     );
   }
@@ -31814,7 +31811,7 @@ var SidecarClient = class {
     }
     let result;
     try {
-      result = await this.run({ command: this.python, args, timeoutMs: 15e3, maxBuffer: 1024 * 1024 });
+      result = await this.run({ command: this.python, args, timeoutMs: 3e4, maxBuffer: 1024 * 1024 });
     } catch (error51) {
       if (error51 instanceof SidecarError) {
         throw error51;
@@ -31843,7 +31840,7 @@ var SidecarClient = class {
 var WIDGET_URI = "ui://awh-project-hub/main-v1.html";
 var SERVER_VERSION = "0.1.0";
 function widgetPath() {
-  return path2.join(path2.dirname(fileURLToPath(import.meta.url)), "widget.html");
+  return path2.join(path2.dirname(fileURLToPath2(import.meta.url)), "widget.html");
 }
 function toolResult(payload, render) {
   const result = {

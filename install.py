@@ -15,6 +15,7 @@ PLUGIN_REQUIRED_FILES = (
     ".codex-plugin/plugin.json",
     ".mcp.json",
     "dist/server.mjs",
+    "dist/sidecar/context_sidecar.py",
     "dist/widget.html",
 )
 

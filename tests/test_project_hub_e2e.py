@@ -92,7 +92,6 @@ class ProjectHubEndToEndTests(unittest.TestCase):
             "HOME": str(self.home),
             "USERPROFILE": str(self.home),
             "AWH_PYTHON": sys.executable,
-            "AWH_SIDECAR_SCRIPT": str(SIDECAR),
         })
         self.run_process(["git", "init", "-b", "main"], cwd=self.repo)
         self.run_process(["git", "config", "user.name", "AWH Test"], cwd=self.repo)

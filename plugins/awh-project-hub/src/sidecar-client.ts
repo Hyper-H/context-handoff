@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ProjectHubPayloadSchema, type ProjectHubPayload, type ProjectLocator } from "./types.js";
 
@@ -62,7 +62,7 @@ export class SidecarClient {
     this.run = options.run ?? defaultRunner;
     this.python = options.python ?? process.env.AWH_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
     this.script = options.script ?? process.env.AWH_SIDECAR_SCRIPT ?? path.join(
-      os.homedir(), ".codex", "skills", "agent-workflow-hub", "scripts", "context_sidecar.py",
+      path.dirname(fileURLToPath(import.meta.url)), "sidecar", "context_sidecar.py",
     );
   }
 
@@ -77,7 +77,7 @@ export class SidecarClient {
     }
     let result: ProcessResult;
     try {
-      result = await this.run({ command: this.python, args, timeoutMs: 15_000, maxBuffer: 1024 * 1024 });
+      result = await this.run({ command: this.python, args, timeoutMs: 30_000, maxBuffer: 1024 * 1024 });
     } catch (error) {
       if (error instanceof SidecarError) {
         throw error;

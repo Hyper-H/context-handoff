@@ -32,6 +32,7 @@ class InstallerTests(unittest.TestCase):
             ".codex-plugin/plugin.json",
             ".mcp.json",
             "dist/server.mjs",
+            "dist/sidecar/context_sidecar.py",
             "dist/widget.html",
         )
         for relative_path in required_files:
@@ -85,6 +86,9 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertTrue(
             (self.plugin_home / "awh-project-hub" / "dist" / "server.mjs").is_file()
+        )
+        self.assertTrue(
+            (self.plugin_home / "awh-project-hub" / "dist" / "sidecar" / "context_sidecar.py").is_file()
         )
 
     def test_reinstall_replaces_only_awh_entry_and_files(self) -> None:

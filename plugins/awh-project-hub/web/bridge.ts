@@ -35,6 +35,8 @@ const DEFAULT_STATE: LocalUiState = {
   taskKey: "",
 };
 
+const RPC_TIMEOUT_MS = 45_000;
+
 export class HubBridge {
   private nextId = 0;
   private initialized?: Promise<void>;
@@ -159,7 +161,7 @@ export class HubBridge {
       const timer = window.setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`${method} timed out.`));
-      }, 15_000);
+      }, RPC_TIMEOUT_MS);
       this.pending.set(id, { resolve, reject, timer });
       window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
     });

@@ -165,6 +165,37 @@ class ProjectHubContractTests(unittest.TestCase):
 
         self.assertIsNone(task["environment"])
 
+    def test_project_level_environment_does_not_inherit_work_item_git_state(self):
+        report = {
+            "projectId": "demo",
+            "baseBranch": "main",
+            "generatedAt": "now",
+            "summaryCounts": {},
+            "needsAttention": [],
+            "warnings": [],
+            "taskRows": [{
+                "taskId": "wi",
+                "taskStatus": "active",
+                "health": "healthy",
+                "worktreePath": "C:/wt",
+                "branch": "codex/worktree",
+                "dirty": True,
+                "threads": [{
+                    "threadId": "discussion",
+                    "threadRole": "discussion",
+                    "environmentType": "project-level",
+                    "worktreePath": "",
+                }],
+            }],
+        }
+
+        environment = self.sidecar.build_project_hub_contract(report)["workItems"][0]["codexTasks"][0]["environment"]
+
+        self.assertEqual(environment["type"], "project-level")
+        self.assertEqual(environment["worktreePath"], "")
+        self.assertEqual(environment["branch"], "")
+        self.assertFalse(environment["dirty"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,12 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
 await mkdir(dist, { recursive: true });
+const sidecarDist = path.join(dist, "sidecar");
+await mkdir(sidecarDist, { recursive: true });
+await copyFile(
+  path.resolve(root, "..", "..", "skills", "agent-workflow-hub", "scripts", "context_sidecar.py"),
+  path.join(sidecarDist, "context_sidecar.py"),
+);
 
 await build({
   entryPoints: [path.join(root, "src", "server.ts")],

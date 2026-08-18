@@ -75,6 +75,9 @@ export function taskEnvironmentLabel(task: CodexTask): string {
   if (!task.environment) {
     return "No environment";
   }
+  if (task.environment.type !== "worktree") {
+    return task.environment.type;
+  }
   return task.environment.branch || task.environment.worktreePath || task.environment.type;
 }
 

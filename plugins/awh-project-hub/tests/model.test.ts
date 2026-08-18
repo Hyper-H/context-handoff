@@ -30,3 +30,18 @@ test("reconciles selection after refresh", () => {
 test("keeps no-environment codex tasks visible", () => {
   assert.equal(taskEnvironmentLabel(fixturePayload.workItems[1]!.codexTasks[0]!), "No environment");
 });
+
+test("labels project-level tasks without inheriting a work item branch", () => {
+  const payload = structuredClone(fixturePayload);
+  const task = payload.workItems[0]!.codexTasks[0]!;
+  task.environment = {
+    type: "project-level",
+    worktreePath: "",
+    branch: "codex/should-not-display",
+    dirty: false,
+    stale: false,
+    dirtyFiles: [],
+  };
+
+  assert.equal(taskEnvironmentLabel(task), "project-level");
+});

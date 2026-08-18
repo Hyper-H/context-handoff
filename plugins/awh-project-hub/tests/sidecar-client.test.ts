@@ -25,6 +25,23 @@ test("passes the project route and returns a validated v1 payload", async () => 
     "--project-id",
     "demo",
   ]);
+  assert.equal(calls[0]?.timeoutMs, 30_000);
+});
+
+test("uses the bundled sidecar adapter by default", async () => {
+  const calls: SpawnRequest[] = [];
+  const client = new SidecarClient({
+    run: async (request) => {
+      calls.push(request);
+      return { code: 0, stdout: JSON.stringify(fixturePayload), stderr: "" };
+    },
+    python: "python",
+  });
+
+  await client.getProjectHub({ worktreePath: "C:/repo" });
+
+  assert.match(calls[0]!.args[0]!, /[\\/]sidecar[\\/]context_sidecar\.py$/);
+  assert.doesNotMatch(calls[0]!.args[0]!, /\.codex[\\/]skills/);
 });
 
 test("requires an explicit worktree route", async () => {
