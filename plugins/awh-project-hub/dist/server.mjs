@@ -293,10 +293,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path4) {
+  if (!path4)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path4.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -624,11 +624,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path4, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path4);
     return iss;
   });
 }
@@ -845,16 +845,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path3 = []) => {
+  const processError = (error52, path4 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path4, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
       } else {
-        const fullpath = [...path3, ...issue2.path];
+        const fullpath = [...path4, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -881,17 +881,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path3 = []) => {
+  const processError = (error52, path4 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path4, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
       } else {
-        const fullpath = [...path3, ...issue2.path];
+        const fullpath = [...path4, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -923,8 +923,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path3) {
+  const path4 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path4) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -14354,13 +14354,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path3 = ref.slice(1).split("/").filter(Boolean);
-  if (path3.length === 0) {
+  const path4 = ref.slice(1).split("/").filter(Boolean);
+  if (path4.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path3[0] === defsKey) {
-    const key = path3[1];
+  if (path4[0] === defsKey) {
+    const key = path4[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -18330,8 +18330,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path3) {
-      let input = path3;
+    function removeDotSegments(path4) {
+      let input = path4;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -18583,8 +18583,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path3, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path3 && path3 !== "/" ? path3 : void 0;
+        const [path4, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path4 && path4 !== "/" ? path4 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -22018,8 +22018,8 @@ var require_dist = __commonJS({
 
 // src/server.ts
 import { readFileSync } from "node:fs";
-import path2 from "node:path";
-import { fileURLToPath as fileURLToPath2, pathToFileURL } from "node:url";
+import path3 from "node:path";
+import { fileURLToPath as fileURLToPath3, pathToFileURL } from "node:url";
 
 // node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/helpers/util.js
 var util;
@@ -22380,8 +22380,8 @@ function getErrorMap() {
 
 // node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path3, errorMaps, issueData } = params;
-  const fullPath = [...path3, ...issueData.path || []];
+  const { data, path: path4, errorMaps, issueData } = params;
+  const fullPath = [...path4, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -22496,11 +22496,11 @@ var errorUtil;
 
 // node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path3, key) {
+  constructor(parent, value, path4, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path3;
+    this._path = path4;
     this._key = key;
   }
   get path() {
@@ -26039,11 +26039,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path3) {
-  if (path3.length === 0) {
+function getDotPath(path4) {
+  if (path4.length === 0) {
     return "object root";
   }
-  return path3.reduce((acc, seg, index) => {
+  return path4.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -31705,9 +31705,139 @@ var StdioServerTransport = class {
 };
 
 // src/sidecar-client.ts
+import { execFile as execFile2 } from "node:child_process";
+import path2 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+
+// src/python-runtime.ts
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+var MINIMUM_VERSION = [3, 10];
+var PROBE_CODE = "import json,sys; print(json.dumps({'executable':sys.executable,'version':[sys.version_info.major,sys.version_info.minor]}))";
+var PythonRuntimeError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "PythonRuntimeError";
+  }
+};
+function execute(command, args, timeoutMs = 5e3) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      { timeout: timeoutMs, maxBuffer: 64 * 1024, windowsHide: true },
+      (error51, stdout) => {
+        if (error51) {
+          reject(error51);
+        } else {
+          resolve(stdout);
+        }
+      }
+    );
+  });
+}
+async function defaultProbe(candidate) {
+  try {
+    const stdout = await execute(candidate.command, [...candidate.argsPrefix, "-c", PROBE_CODE]);
+    const line = stdout.trim().split(/\r?\n/).at(-1);
+    if (!line) return void 0;
+    const value = JSON.parse(line);
+    if (typeof value.executable !== "string" || !Array.isArray(value.version) || value.version.length < 2 || !value.version.slice(0, 2).every(Number.isInteger)) {
+      return void 0;
+    }
+    return {
+      executable: value.executable,
+      version: [value.version[0], value.version[1]]
+    };
+  } catch {
+    return void 0;
+  }
+}
+async function defaultReadInstalledRuntime() {
+  const runtimePath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "runtime",
+    "python.json"
+  );
+  try {
+    const value = JSON.parse(await readFile(runtimePath, "utf8"));
+    return value.schemaVersion === 1 && typeof value.executable === "string" ? value.executable : void 0;
+  } catch {
+    return void 0;
+  }
+}
+async function defaultDiscoverWindowsPaths(env) {
+  try {
+    const windowsDirectory = env.SystemRoot || env.WINDIR;
+    const whereCommand = windowsDirectory ? path.join(windowsDirectory, "System32", "where.exe") : "where.exe";
+    const stdout = await execute(whereCommand, ["python"]);
+    return stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+function isWindowsStoreAlias(command) {
+  return /[\\/]Microsoft[\\/]WindowsApps[\\/]/i.test(command);
+}
+function supportsMinimumVersion(version2) {
+  return version2[0] > MINIMUM_VERSION[0] || version2[0] === MINIMUM_VERSION[0] && version2[1] >= MINIMUM_VERSION[1];
+}
+function environmentCandidate(env, name, source) {
+  const command = env[name]?.trim();
+  return command ? { command, argsPrefix: [], source } : void 0;
+}
+async function resolvePythonRuntime(options = {}) {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const platformPath = platform === "win32" ? path.win32 : path.posix;
+  const probe = options.probe ?? defaultProbe;
+  const readInstalledRuntime = options.readInstalledRuntime ?? defaultReadInstalledRuntime;
+  const discoverWindowsPaths = options.discoverWindowsPaths ?? (() => defaultDiscoverWindowsPaths(env));
+  const seen = /* @__PURE__ */ new Set();
+  const checked = [];
+  const tryCandidate = async (candidate) => {
+    if (!candidate || isWindowsStoreAlias(candidate.command)) return void 0;
+    const identity = `${candidate.command}\0${candidate.argsPrefix.join("\0")}`.replaceAll("\\", "/").toLocaleLowerCase();
+    if (seen.has(identity)) return void 0;
+    seen.add(identity);
+    checked.push(candidate.source);
+    const result = await probe(candidate);
+    if (!result || isWindowsStoreAlias(result.executable) || !supportsMinimumVersion(result.version)) {
+      return void 0;
+    }
+    return { command: result.executable, argsPrefix: [], source: candidate.source };
+  };
+  const initial = [
+    environmentCandidate(env, "AWH_PYTHON", "AWH_PYTHON"),
+    env.VIRTUAL_ENV ? { command: platformPath.join(env.VIRTUAL_ENV, platform === "win32" ? "Scripts/python.exe" : "bin/python"), argsPrefix: [], source: "VIRTUAL_ENV" } : void 0,
+    env.CONDA_PREFIX ? { command: platformPath.join(env.CONDA_PREFIX, platform === "win32" ? "python.exe" : "bin/python"), argsPrefix: [], source: "CONDA_PREFIX" } : void 0
+  ];
+  for (const candidate of initial) {
+    const result = await tryCandidate(candidate);
+    if (result) return result;
+  }
+  const installed = await readInstalledRuntime();
+  const installedResult = await tryCandidate(installed ? { command: installed, argsPrefix: [], source: "AWH installer" } : void 0);
+  if (installedResult) return installedResult;
+  if (platform === "win32") {
+    const launcher = await tryCandidate({ command: "py", argsPrefix: ["-3"], source: "Windows py launcher" });
+    if (launcher) return launcher;
+    for (const command of await discoverWindowsPaths()) {
+      const result = await tryCandidate({ command, argsPrefix: [], source: "Windows PATH" });
+      if (result) return result;
+    }
+  }
+  for (const command of ["python3", "python"]) {
+    const result = await tryCandidate({ command, argsPrefix: [], source: `${command} command` });
+    if (result) return result;
+  }
+  const sources = [...new Set(checked)].join(", ");
+  throw new PythonRuntimeError(
+    `Python 3.10 or later was not found. Checked: ${sources || "configured and platform Python locations"}. Rerun the AWH installer with a valid Python interpreter or set AWH_PYTHON to its absolute path.`
+  );
+}
 
 // src/types.ts
 var EnvironmentSchema = external_exports.object({
@@ -31773,7 +31903,7 @@ function bounded(value, limit = 1024) {
   return value.replace(/[\r\n\t]+/g, " ").trim().slice(0, limit);
 }
 var defaultRunner = (request) => new Promise((resolve, reject) => {
-  execFile(
+  execFile2(
     request.command,
     request.args,
     { timeout: request.timeoutMs, maxBuffer: request.maxBuffer, windowsHide: true },
@@ -31789,13 +31919,14 @@ var defaultRunner = (request) => new Promise((resolve, reject) => {
 });
 var SidecarClient = class {
   run;
-  python;
+  resolvePython;
   script;
+  runtime;
   constructor(options = {}) {
     this.run = options.run ?? defaultRunner;
-    this.python = options.python ?? process.env.AWH_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
-    this.script = options.script ?? process.env.AWH_SIDECAR_SCRIPT ?? path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
+    this.resolvePython = options.python ? async () => ({ command: options.python, argsPrefix: [], source: "SidecarClient override" }) : options.resolvePython ?? resolvePythonRuntime;
+    this.script = options.script ?? process.env.AWH_SIDECAR_SCRIPT ?? path2.join(
+      path2.dirname(fileURLToPath2(import.meta.url)),
       "sidecar",
       "context_sidecar.py"
     );
@@ -31805,13 +31936,15 @@ var SidecarClient = class {
     if (!worktreePath) {
       throw new SidecarError("worktreePath is required to resolve an AWH project.");
     }
-    const args = [this.script, "project-hub-payload", "--worktree", worktreePath];
+    this.runtime ??= this.resolvePython();
+    const runtime = await this.runtime;
+    const args = [...runtime.argsPrefix, this.script, "project-hub-payload", "--worktree", worktreePath];
     if (locator.projectId?.trim()) {
       args.push("--project-id", locator.projectId.trim());
     }
     let result;
     try {
-      result = await this.run({ command: this.python, args, timeoutMs: 3e4, maxBuffer: 1024 * 1024 });
+      result = await this.run({ command: runtime.command, args, timeoutMs: 3e4, maxBuffer: 1024 * 1024 });
     } catch (error51) {
       if (error51 instanceof SidecarError) {
         throw error51;
@@ -31840,7 +31973,7 @@ var SidecarClient = class {
 var WIDGET_URI = "ui://awh-project-hub/main-v1.html";
 var SERVER_VERSION = "0.1.0";
 function widgetPath() {
-  return path2.join(path2.dirname(fileURLToPath2(import.meta.url)), "widget.html");
+  return path3.join(path3.dirname(fileURLToPath3(import.meta.url)), "widget.html");
 }
 function toolResult(payload, render) {
   const result = {
@@ -31910,7 +32043,7 @@ async function main() {
   const server = createAwhServer();
   await server.connect(new StdioServerTransport());
 }
-var entry = process.argv[1] ? pathToFileURL(path2.resolve(process.argv[1])).href : "";
+var entry = process.argv[1] ? pathToFileURL(path3.resolve(process.argv[1])).href : "";
 if (entry === import.meta.url) {
   main().catch((error51) => {
     process.stderr.write(`AWH Project Hub MCP failed: ${error51 instanceof Error ? error51.message : String(error51)}

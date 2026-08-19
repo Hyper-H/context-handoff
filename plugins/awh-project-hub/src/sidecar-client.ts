@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolvePythonRuntime, type PythonCommand } from "./python-runtime.js";
 import { ProjectHubPayloadSchema, type ProjectHubPayload, type ProjectLocator } from "./types.js";
 
 
@@ -50,17 +51,21 @@ export const defaultRunner: ProcessRunner = (request) => new Promise((resolve, r
 export interface SidecarClientOptions {
   run?: ProcessRunner;
   python?: string;
+  resolvePython?: () => Promise<PythonCommand>;
   script?: string;
 }
 
 export class SidecarClient {
   private readonly run: ProcessRunner;
-  private readonly python: string;
+  private readonly resolvePython: () => Promise<PythonCommand>;
   private readonly script: string;
+  private runtime?: Promise<PythonCommand>;
 
   constructor(options: SidecarClientOptions = {}) {
     this.run = options.run ?? defaultRunner;
-    this.python = options.python ?? process.env.AWH_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
+    this.resolvePython = options.python
+      ? async () => ({ command: options.python!, argsPrefix: [], source: "SidecarClient override" })
+      : options.resolvePython ?? resolvePythonRuntime;
     this.script = options.script ?? process.env.AWH_SIDECAR_SCRIPT ?? path.join(
       path.dirname(fileURLToPath(import.meta.url)), "sidecar", "context_sidecar.py",
     );
@@ -71,13 +76,15 @@ export class SidecarClient {
     if (!worktreePath) {
       throw new SidecarError("worktreePath is required to resolve an AWH project.");
     }
-    const args = [this.script, "project-hub-payload", "--worktree", worktreePath];
+    this.runtime ??= this.resolvePython();
+    const runtime = await this.runtime;
+    const args = [...runtime.argsPrefix, this.script, "project-hub-payload", "--worktree", worktreePath];
     if (locator.projectId?.trim()) {
       args.push("--project-id", locator.projectId.trim());
     }
     let result: ProcessResult;
     try {
-      result = await this.run({ command: this.python, args, timeoutMs: 30_000, maxBuffer: 1024 * 1024 });
+      result = await this.run({ command: runtime.command, args, timeoutMs: 30_000, maxBuffer: 1024 * 1024 });
     } catch (error) {
       if (error instanceof SidecarError) {
         throw error;

@@ -44,6 +44,29 @@ test("uses the bundled sidecar adapter by default", async () => {
   assert.doesNotMatch(calls[0]!.args[0]!, /\.codex[\\/]skills/);
 });
 
+test("prepends launcher arguments and caches runtime resolution", async () => {
+  const calls: SpawnRequest[] = [];
+  let resolutions = 0;
+  const client = new SidecarClient({
+    resolvePython: async () => {
+      resolutions += 1;
+      return { command: "py", argsPrefix: ["-3"], source: "test launcher" };
+    },
+    run: async (request) => {
+      calls.push(request);
+      return { code: 0, stdout: JSON.stringify(fixturePayload), stderr: "" };
+    },
+  });
+
+  await client.getProjectHub({ worktreePath: "C:/repo" });
+  await client.getProjectHub({ worktreePath: "C:/repo" });
+
+  assert.equal(resolutions, 1);
+  assert.equal(calls[0]?.command, "py");
+  assert.equal(calls[0]?.args[0], "-3");
+  assert.match(calls[0]?.args[1] ?? "", /[\\/]sidecar[\\/]context_sidecar\.py$/);
+});
+
 test("requires an explicit worktree route", async () => {
   const client = new SidecarClient({ run: async () => ({ code: 0, stdout: "{}", stderr: "" }) });
   await assert.rejects(() => client.getProjectHub({}), /worktreePath is required/);

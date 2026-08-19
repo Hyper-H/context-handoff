@@ -18,13 +18,15 @@ class StdioMcpClient {
   private id = 0;
 
   constructor() {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      AWH_SIDECAR_SCRIPT: path.join(root, "tests", "fixture-sidecar.py"),
+    };
+    delete env.AWH_PYTHON;
+    if (process.env.AWH_TEST_PYTHON) env.AWH_PYTHON = process.env.AWH_TEST_PYTHON;
     this.process = spawn(process.execPath, [path.join(root, "dist", "server.mjs")], {
       cwd: root,
-      env: {
-        ...process.env,
-        AWH_PYTHON: process.execPath,
-        AWH_SIDECAR_SCRIPT: path.join(root, "tests", "fixture-sidecar.mjs"),
-      },
+      env,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -152,6 +153,22 @@ def copy_plugin(source: Path, destination: Path, dry_run: bool) -> None:
     print("")
 
 
+def install_python_runtime(plugin_dir: Path, dry_run: bool) -> None:
+    executable = Path(sys.executable).resolve()
+    runtime_path = plugin_dir / "dist" / "runtime" / "python.json"
+    print(f"Python runtime: {executable}")
+    if dry_run:
+        print("Dry run only; Python runtime binding was not written.")
+        print("")
+        return
+    write_json_atomic(runtime_path, {
+        "schemaVersion": 1,
+        "executable": str(executable),
+    })
+    print(f"Recorded Python runtime in {runtime_path}.")
+    print("")
+
+
 def install_marketplace_entry(path: Path, dry_run: bool) -> str:
     marketplace = load_marketplace(path)
     name = marketplace.get("name", "personal")
@@ -184,11 +201,13 @@ def run_install(args: argparse.Namespace, *, repo_root: Path) -> int:
 
     plugin_home = Path(args.plugin_home).expanduser().resolve()
     marketplace_path = Path(args.marketplace_path).expanduser().resolve()
+    installed_plugin = plugin_home / PLUGIN_NAME
     copy_plugin(
         repo_root / "plugins" / PLUGIN_NAME,
-        plugin_home / PLUGIN_NAME,
+        installed_plugin,
         args.dry_run,
     )
+    install_python_runtime(installed_plugin, args.dry_run)
     marketplace_name = install_marketplace_entry(marketplace_path, args.dry_run)
     print("Register or reinstall the plugin with:")
     print(f"codex plugin add {PLUGIN_NAME}@{marketplace_name}")

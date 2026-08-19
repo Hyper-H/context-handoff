@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,9 @@ class InstallerTests(unittest.TestCase):
         self.codex_home = self.root / "codex"
         self.plugin_home = self.root / "plugins"
         self.marketplace = self.root / ".agents" / "plugins" / "marketplace.json"
+        self.installed_runtime = (
+            self.plugin_home / "awh-project-hub" / "dist" / "runtime" / "python.json"
+        )
 
         for skill_name in ("agent-workflow-hub", "context-handoff"):
             skill_dir = self.source_root / "skills" / skill_name
@@ -90,11 +94,18 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(
             (self.plugin_home / "awh-project-hub" / "dist" / "sidecar" / "context_sidecar.py").is_file()
         )
+        runtime = json.loads(self.installed_runtime.read_text(encoding="utf-8"))
+        self.assertEqual(runtime["schemaVersion"], 1)
+        self.assertEqual(Path(runtime["executable"]), Path(sys.executable).resolve())
 
     def test_reinstall_replaces_only_awh_entry_and_files(self) -> None:
         run_install(self.args(), repo_root=self.source_root)
         marker = self.plugin_home / "awh-project-hub" / "obsolete.txt"
         marker.write_text("remove", encoding="utf-8")
+        self.installed_runtime.write_text(
+            json.dumps({"schemaVersion": 1, "executable": "C:/stale/python.exe"}),
+            encoding="utf-8",
+        )
 
         run_install(self.args(), repo_root=self.source_root)
 
@@ -104,6 +115,8 @@ class InstallerTests(unittest.TestCase):
             [item["name"] for item in installed["plugins"]].count("awh-project-hub"),
             1,
         )
+        runtime = json.loads(self.installed_runtime.read_text(encoding="utf-8"))
+        self.assertEqual(Path(runtime["executable"]), Path(sys.executable).resolve())
 
     def test_dry_run_changes_nothing(self) -> None:
         self.write_marketplace({"name": "personal", "plugins": []})
@@ -113,6 +126,7 @@ class InstallerTests(unittest.TestCase):
 
         self.assertEqual(self.marketplace.read_bytes(), before)
         self.assertFalse((self.plugin_home / "awh-project-hub").exists())
+        self.assertFalse(self.installed_runtime.exists())
         self.assertFalse(self.codex_home.exists())
 
     def test_rejects_missing_built_artifacts(self) -> None:
